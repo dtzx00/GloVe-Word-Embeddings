@@ -25,7 +25,7 @@ prep.remove_stopwords("jar of jam")   # ['jar', 'jam']
 
 `prep.validate` returns `True` for words that appear in Olson et al. (2021)'s validated word list. 
 
-## Usage
+## Usages
 
 ```python
 import glove_word_embeddings as gwe
@@ -45,7 +45,7 @@ gwe.clean_up()                 # deletes all cached files
 
 Files are cached in `~/.cache/glove-word-embeddings`.
 
-## Citation
+## Citations
 
 Wang et al., (2026) 
 ```
