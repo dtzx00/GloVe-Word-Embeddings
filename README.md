@@ -8,9 +8,9 @@ Library to quickly validate words and get them embedded for academic research.
 pip install glove-word-embeddings
 ```
 
-## prep
+## Preprocessing
 
-Small helpers for cleaning phrases before embedding.
+Helpers for preparing the words or phrases before embedding.
 
 ```python
 from glove_word_embeddings import prep
@@ -23,9 +23,7 @@ prep.validate("jar of jam")   # False  (multi-word phrases always return False)
 prep.remove_stopwords("jar of jam")   # ['jar', 'jam']
 ```
 
-`prep.validate` only returns `True` for single words that appear in the Olson validated word list. Multi-word phrases are always `False`.
-
-`prep.remove_stopwords` is used internally by `model.embed_phrase()` when averaging the parts of multi-word expressions.
+`prep.validate` returns `True` for words that appear in Olson et al. (2021)'s validated word list. 
 
 ## Usage
 
@@ -38,14 +36,14 @@ model = gwe.load("glove-6b-300d")   # downloads on first use, caches locally
 model.embed("cat")             # exact match only -> np.ndarray or None
 model.vocab()                  # -> set of all words in the model
 
-# Multi-word phrases (original paper logic)
+# Multi-word phrases
 model.embed_phrase("jar of jam")   # tries "jar of jam" / "jar_of_jam" / "jar-of-jam",
                                    # otherwise averages the non-stopword parts
 
 gwe.clean_up()                 # deletes all cached files
 ```
 
-Files are cached in `~/.cache/glove-word-embeddings` (override with `GLOVE_WORD_EMBEDDINGS_CACHE`).
+Files are cached in `~/.cache/glove-word-embeddings`.
 
 ## Citation
 
