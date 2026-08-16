@@ -67,7 +67,7 @@ def load(key: str, force_download: bool = False):
 
 # --- preprocess / data cleaning -----------------------------------------
 
-class Preprocess:
+class prep:
     STOPWORDS = {"a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with"}
 
     @staticmethod
@@ -86,7 +86,7 @@ class Preprocess:
     def remove_stopwords(phrase: str) -> list[str]:
         """Return the non-stopword tokens of a phrase (lower-cased)."""
         tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
-        return [t for t in tokens if t not in Preprocess.STOPWORDS]
+        return [t for t in tokens if t not in prep.STOPWORDS]
 
 
 class Model:
@@ -107,7 +107,7 @@ class Model:
             if variant in self.vectors:
                 return self.vectors[variant]
 
-        parts = [self.vectors[p] for p in Preprocess.remove_stopwords(phrase) if p in self.vectors]
+        parts = [self.vectors[p] for p in prep.remove_stopwords(phrase) if p in self.vectors]
         if parts and len({p.shape for p in parts}) == 1:
             return np.mean(np.stack(parts).astype(np.float32), axis=0)
         return None
