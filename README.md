@@ -25,3 +25,17 @@ gwe.clean_up()                 # deletes all cached files
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings` (override with `GLOVE_WORD_EMBEDDINGS_CACHE`).
+
+## Citation
+
+```
+Wang, D., Huang, D., Shen, H., & Uzzi, B. (2026). A large-scale comparison of
+divergent creativity in humans and large language models. Nature Human
+Behaviour, 10(3), 531–540. https://doi.org/10.1038/s41562-025-02331-1
+
+Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E.
+(2021). Naming unrelated words predicts creativity. Proceedings of the
+National Academy of Sciences, 118(25), e2022340118.
+https://doi.org/10.1073/pnas.2022340118
+```
+
