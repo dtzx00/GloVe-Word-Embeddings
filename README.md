@@ -8,6 +8,25 @@ Library to quickly validate words and get them embedded for academic research.
 pip install glove-word-embeddings
 ```
 
+## prep
+
+Small helpers for cleaning phrases before embedding.
+
+```python
+from glove_word_embeddings import prep
+
+# Check against Olson’s validated single-word list
+prep.validate("cat")          # True
+prep.validate("jar of jam")   # False  (multi-word phrases always return False)
+
+# Remove common stopwords from a phrase
+prep.remove_stopwords("jar of jam")   # ['jar', 'jam']
+```
+
+`prep.validate` only returns `True` for single words that appear in the Olson validated word list. Multi-word phrases are always `False`.
+
+`prep.remove_stopwords` is used internally by `model.embed_phrase()` when averaging the parts of multi-word expressions.
+
 ## Usage
 
 ```python
@@ -27,25 +46,6 @@ gwe.clean_up()                 # deletes all cached files
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings` (override with `GLOVE_WORD_EMBEDDINGS_CACHE`).
-
-## Preprocess
-
-Small helpers for cleaning phrases before embedding.
-
-```python
-from glove_word_embeddings import Preprocess
-
-# Check against Olson’s validated single-word list
-Preprocess.validate("cat")          # True
-Preprocess.validate("jar of jam")   # False  (multi-word phrases always return False)
-
-# Remove common stopwords from a phrase
-Preprocess.remove_stopwords("jar of jam")   # ['jar', 'jam']
-```
-
-`Preprocess.validate` only returns `True` for single words that appear in the Olson validated word list. Multi-word phrases are always `False`.
-
-`Preprocess.remove_stopwords` is used internally by `model.embed_phrase()` when averaging the parts of multi-word expressions.
 
 ## Citation
 
