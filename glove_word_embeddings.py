@@ -5,6 +5,8 @@ import shutil
 
 import numpy as np
 import requests
+from nltk.corpus import wordnet as wn
+from nltk.corpus import names as nltk_names
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
 CACHE_DIR = os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
@@ -29,6 +31,7 @@ FILES = {
 
 
 _validated_words = None
+_names = None
 
 
 def list_models():
@@ -36,9 +39,10 @@ def list_models():
 
 
 def clean_up():
-    global _validated_words
+    global _validated_words, _names
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
     _validated_words = None
+    _names = None
 
 
 def load(key: str, force_download: bool = False):
@@ -70,23 +74,23 @@ def load(key: str, force_download: bool = False):
 class prep:
     STOPWORDS = {"a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with"}
 
-    # category -> set of seed words  (WordNet ancestry can be added later)
+    # category -> (WordNet ancestor synset or None, seed words)
     CATEGORIES = {
-        "animals": {"dog", "cat", "lion", "tiger", "bear", "elephant", "horse", "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit", "monkey", "zebra", "giraffe", "kangaroo", "whale", "dolphin", "shark", "snake", "frog", "goose", "duck", "chicken", "hippo", "rhino", "leopard", "cheetah", "panda", "koala", "otter"},
-        "birds": {"robin", "sparrow", "eagle", "hawk", "owl", "parrot", "penguin", "crow", "pigeon", "swan", "flamingo", "peacock", "finch"},
-        "insects": {"ant", "bee", "wasp", "hornet", "beetle", "fly", "moth", "butterfly", "dragonfly", "cricket", "grasshopper", "ladybug"},
-        "foods": {"bread", "cheese", "rice", "pasta", "pizza", "burger", "cake", "soup", "egg", "butter", "sugar", "salt", "chocolate", "cookie", "sandwich", "cereal", "biscuit", "jam", "honey"},
-        "fruits": {"apple", "banana", "orange", "grape", "pear", "peach", "plum", "cherry", "mango", "melon", "lemon", "lime", "kiwi", "strawberry", "pineapple", "raspberry", "blueberry"},
-        "vegetables": {"carrot", "potato", "onion", "pea", "peas", "bean", "beans", "broccoli", "spinach", "lettuce", "cabbage", "cucumber", "pepper", "tomato", "corn", "celery"},
-        "plants": {"tree", "fern", "moss", "rose", "tulip", "daisy", "oak", "pine", "cactus", "ivy", "bamboo", "bush", "shrub", "vine"},
-        "colors": {"red", "blue", "green", "yellow", "orange", "purple", "pink", "brown", "black", "white", "grey", "gray", "violet", "indigo", "cyan", "magenta", "turquoise", "maroon", "beige"},
-        "body_parts": {"arm", "leg", "hand", "foot", "head", "eye", "ear", "nose", "mouth", "finger", "toe", "knee", "elbow", "shoulder", "heart", "liver", "lung", "brain", "teeth", "tooth", "hair", "skin"},
-        "metals": {"gold", "silver", "iron", "copper", "bronze", "steel", "tin", "zinc", "lead", "aluminium", "aluminum", "nickel", "platinum"},
-        "planets": {"mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "sun", "moon", "star", "comet", "asteroid", "supernova", "galaxy", "nebula", "meteor"},
-        "sports": {"football", "soccer", "basketball", "tennis", "cricket", "golf", "rugby", "hockey", "baseball", "swimming", "boxing", "cycling", "skiing"},
-        "tools": {"hammer", "screwdriver", "wrench", "drill", "saw", "pliers", "chisel", "axe", "spanner", "clamp"},
-        "countries": {"france", "germany", "spain", "italy", "china", "japan", "india", "brazil", "canada", "egypt", "kenya", "peru", "chile", "mexico"},
-        "environment": {
+        "animals": ("animal.n.01", {"dog", "cat", "lion", "tiger", "bear", "elephant", "horse", "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit", "monkey", "zebra", "giraffe", "kangaroo", "whale", "dolphin", "shark", "snake", "frog", "goose", "duck", "chicken", "hippo", "rhino", "leopard", "cheetah", "panda", "koala", "otter"}),
+        "birds": ("bird.n.01", {"robin", "sparrow", "eagle", "hawk", "owl", "parrot", "penguin", "crow", "pigeon", "swan", "flamingo", "peacock", "finch"}),
+        "insects": ("insect.n.01", {"ant", "bee", "wasp", "hornet", "beetle", "fly", "moth", "butterfly", "dragonfly", "cricket", "grasshopper", "ladybug"}),
+        "foods": ("food.n.01", {"bread", "cheese", "rice", "pasta", "pizza", "burger", "cake", "soup", "egg", "butter", "sugar", "salt", "chocolate", "cookie", "sandwich", "cereal", "biscuit", "jam", "honey"}),
+        "fruits": ("fruit.n.01", {"apple", "banana", "orange", "grape", "pear", "peach", "plum", "cherry", "mango", "melon", "lemon", "lime", "kiwi", "strawberry", "pineapple", "raspberry", "blueberry"}),
+        "vegetables": ("vegetable.n.01", {"carrot", "potato", "onion", "pea", "peas", "bean", "beans", "broccoli", "spinach", "lettuce", "cabbage", "cucumber", "pepper", "tomato", "corn", "celery"}),
+        "plants": ("plant.n.02", {"tree", "fern", "moss", "rose", "tulip", "daisy", "oak", "pine", "cactus", "ivy", "bamboo", "bush", "shrub", "vine"}),
+        "colors": ("color.n.01", {"red", "blue", "green", "yellow", "orange", "purple", "pink", "brown", "black", "white", "grey", "gray", "violet", "indigo", "cyan", "magenta", "turquoise", "maroon", "beige"}),
+        "body_parts": ("body_part.n.01", {"arm", "leg", "hand", "foot", "head", "eye", "ear", "nose", "mouth", "finger", "toe", "knee", "elbow", "shoulder", "heart", "liver", "lung", "brain", "teeth", "tooth", "hair", "skin"}),
+        "metals": ("metal.n.01", {"gold", "silver", "iron", "copper", "bronze", "steel", "tin", "zinc", "lead", "aluminium", "aluminum", "nickel", "platinum"}),
+        "planets": (None, {"mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "sun", "moon", "star", "comet", "asteroid", "supernova", "galaxy", "nebula", "meteor"}),
+        "sports": (None, {"football", "soccer", "basketball", "tennis", "cricket", "golf", "rugby", "hockey", "baseball", "swimming", "boxing", "cycling", "skiing"}),
+        "tools": ("tool.n.01", {"hammer", "screwdriver", "wrench", "drill", "saw", "pliers", "chisel", "axe", "spanner", "clamp"}),
+        "countries": ("country.n.02", {"france", "germany", "spain", "italy", "china", "japan", "india", "brazil", "canada", "egypt", "kenya", "peru", "chile", "mexico"}),
+        "environment": (None, {
             "desk", "table", "chair", "bed", "sofa", "couch", "shelf", "bookshelf", "stool", "bench", "cabinet", "drawer", "wardrobe", "dresser", "nightstand",
             "wall", "walls", "floor", "ceiling", "door", "window", "roof", "stairs", "carpet", "rug", "curtain", "curtains", "blind", "blinds", "tile", "tiles",
             "corner", "room", "hallway", "fireplace", "radiator", "switch", "socket",
@@ -95,18 +99,27 @@ class prep:
             "pen", "pencil", "paper", "cup", "mug", "glass", "keyboard", "mouse", "phone", "laptop", "computer", "monitor", "screen", "lamp", "book", "books",
             "bottle", "notebook", "charger", "cable", "wallet", "key", "keys", "clock", "remote", "tissue", "plate", "bowl", "fork", "spoon", "knife", "napkin",
             "sky", "tree", "trees", "grass", "cloud", "clouds", "sun", "car", "cars", "street", "road", "garden", "fence", "bush", "bird",
-        },
-        "places": {
+        }),
+        "places": (None, {
             "england", "scotland", "wales", "ireland", "france", "germany", "spain", "italy", "china", "japan", "india", "brazil", "canada", "mexico",
             "egypt", "kenya", "russia", "america", "usa", "uk", "europe", "asia", "africa", "australia",
             "london", "paris", "berlin", "rome", "madrid", "tokyo", "beijing", "moscow", "newyork", "chicago", "boston", "sydney", "dublin", "edinburgh", "manchester",
-        },
-        "brands": {
+        }),
+        "brands": (None, {
             "google", "apple", "microsoft", "amazon", "facebook", "tesla", "nike", "adidas", "coca", "cola", "pepsi", "mcdonalds", "starbucks",
             "samsung", "sony", "toyota", "ford", "bmw", "gucci", "prada", "disney", "netflix", "spotify", "ikea", "lego",
-        },
-        "names": set(),  # to be filled together
+        }),
+        "names": (None, None),  # filled lazily from nltk.corpus.names
     }
+
+    PROPER_NOUN_CATEGORIES = {"places", "names", "brands"}
+
+    @staticmethod
+    def _get_names():
+        global _names
+        if _names is None:
+            _names = {n.lower() for n in nltk_names.words()}
+        return _names
 
     @staticmethod
     def validate(word: str) -> bool:
@@ -127,7 +140,39 @@ class prep:
         return [t for t in tokens if t not in prep.STOPWORDS]
 
     @staticmethod
-    def check_category(words: list, number_of_words: int = 5, category: str | None = None) -> bool:
+    def check_category(word: str) -> set[str]:
+        """Return the set of categories a single word belongs to.
+
+        Membership is decided by seed list or WordNet hypernym ancestry.
+        For places/names/brands the word must also have no WordNet sense
+        (i.e. it is a pure proper noun).
+        """
+        word = word.strip().lower()
+        out = set()
+
+        for name, (syn, seeds) in prep.CATEGORIES.items():
+            if name == "names":
+                seeds = prep._get_names()
+
+            if seeds is not None and word in seeds:
+                # proper-noun categories need the common-word filter
+                if name in prep.PROPER_NOUN_CATEGORIES and len(wn.synsets(word)) > 0:
+                    continue
+                out.add(name)
+                continue
+
+            if syn is not None:
+                try:
+                    cat = wn.synset(syn)
+                    if any(cat in p for s in wn.synsets(word, pos=wn.NOUN) for p in s.hypernym_paths()):
+                        out.add(name)
+                except Exception:
+                    pass
+
+        return out
+
+    @staticmethod
+    def count_categories(words: list, number_of_words: int = 5, category: str | None = None) -> bool:
         """True if ≥ number_of_words of the words belong to the same category.
 
         - category=None          → any category (SI Rule 2)
@@ -138,8 +183,9 @@ class prep:
         counts = {c: 0 for c in targets}
 
         for w in words:
+            cats = prep.check_category(w)
             for name in targets:
-                if w in prep.CATEGORIES[name]:
+                if name in cats:
                     counts[name] += 1
 
         return max(counts.values()) >= number_of_words
