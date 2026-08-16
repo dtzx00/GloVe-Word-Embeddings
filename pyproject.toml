@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glove-word-embeddings"
+version = "0.1.0"
+description = "Download and load word embeddings from a public S3 bucket, with local caching"
+requires-python = ">=3.9"
+dependencies = ["requests"]
+
+[tool.setuptools]
+py-modules = ["glove_word_embeddings"]
