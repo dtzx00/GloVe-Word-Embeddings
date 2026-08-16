@@ -16,14 +16,12 @@ import glove_word_embeddings as gwe
 gwe.list_models()              # {key: filename, ...}
 
 model = gwe.load("glove-6b-300d")   # downloads on first use, caches locally
-model.embed("cat")             # -> np.ndarray or None if not in vocab
+model.embed("cat")             # exact match only -> np.ndarray or None
 model.vocab()                  # -> set of all words in the model
 
 # Multi-word phrases (original paper logic)
 model.embed_phrase("jar of jam")   # tries "jar of jam" / "jar_of_jam" / "jar-of-jam",
                                    # otherwise averages the non-stopword parts
-
-gwe.validate("cat")            # -> True / False, checked against the validated word list
 
 gwe.clean_up()                 # deletes all cached files
 ```
@@ -32,7 +30,7 @@ Files are cached in `~/.cache/glove-word-embeddings` (override with `GLOVE_WORD_
 
 ## Preprocess
 
-The package includes a small preprocessing helper for cleaning phrases before embedding.
+Small helpers for cleaning phrases before embedding.
 
 ```python
 from glove_word_embeddings import Preprocess
