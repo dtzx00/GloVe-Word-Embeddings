@@ -65,10 +65,48 @@ def load(key: str, force_download: bool = False):
             return {line.strip() for line in f if line.strip()}
 
 
-# --- preprocess / data cleaning -----------------------------------------
+# --- prep / data cleaning -----------------------------------------
 
 class prep:
     STOPWORDS = {"a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with"}
+
+    # category -> set of seed words  (WordNet ancestry can be added later)
+    CATEGORIES = {
+        "animals": {"dog", "cat", "lion", "tiger", "bear", "elephant", "horse", "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit", "monkey", "zebra", "giraffe", "kangaroo", "whale", "dolphin", "shark", "snake", "frog", "goose", "duck", "chicken", "hippo", "rhino", "leopard", "cheetah", "panda", "koala", "otter"},
+        "birds": {"robin", "sparrow", "eagle", "hawk", "owl", "parrot", "penguin", "crow", "pigeon", "swan", "flamingo", "peacock", "finch"},
+        "insects": {"ant", "bee", "wasp", "hornet", "beetle", "fly", "moth", "butterfly", "dragonfly", "cricket", "grasshopper", "ladybug"},
+        "foods": {"bread", "cheese", "rice", "pasta", "pizza", "burger", "cake", "soup", "egg", "butter", "sugar", "salt", "chocolate", "cookie", "sandwich", "cereal", "biscuit", "jam", "honey"},
+        "fruits": {"apple", "banana", "orange", "grape", "pear", "peach", "plum", "cherry", "mango", "melon", "lemon", "lime", "kiwi", "strawberry", "pineapple", "raspberry", "blueberry"},
+        "vegetables": {"carrot", "potato", "onion", "pea", "peas", "bean", "beans", "broccoli", "spinach", "lettuce", "cabbage", "cucumber", "pepper", "tomato", "corn", "celery"},
+        "plants": {"tree", "fern", "moss", "rose", "tulip", "daisy", "oak", "pine", "cactus", "ivy", "bamboo", "bush", "shrub", "vine"},
+        "colors": {"red", "blue", "green", "yellow", "orange", "purple", "pink", "brown", "black", "white", "grey", "gray", "violet", "indigo", "cyan", "magenta", "turquoise", "maroon", "beige"},
+        "body_parts": {"arm", "leg", "hand", "foot", "head", "eye", "ear", "nose", "mouth", "finger", "toe", "knee", "elbow", "shoulder", "heart", "liver", "lung", "brain", "teeth", "tooth", "hair", "skin"},
+        "metals": {"gold", "silver", "iron", "copper", "bronze", "steel", "tin", "zinc", "lead", "aluminium", "aluminum", "nickel", "platinum"},
+        "planets": {"mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "sun", "moon", "star", "comet", "asteroid", "supernova", "galaxy", "nebula", "meteor"},
+        "sports": {"football", "soccer", "basketball", "tennis", "cricket", "golf", "rugby", "hockey", "baseball", "swimming", "boxing", "cycling", "skiing"},
+        "tools": {"hammer", "screwdriver", "wrench", "drill", "saw", "pliers", "chisel", "axe", "spanner", "clamp"},
+        "countries": {"france", "germany", "spain", "italy", "china", "japan", "india", "brazil", "canada", "egypt", "kenya", "peru", "chile", "mexico"},
+        "environment": {
+            "desk", "table", "chair", "bed", "sofa", "couch", "shelf", "bookshelf", "stool", "bench", "cabinet", "drawer", "wardrobe", "dresser", "nightstand",
+            "wall", "walls", "floor", "ceiling", "door", "window", "roof", "stairs", "carpet", "rug", "curtain", "curtains", "blind", "blinds", "tile", "tiles",
+            "corner", "room", "hallway", "fireplace", "radiator", "switch", "socket",
+            "shoe", "shoes", "shirt", "tshirt", "sock", "socks", "hat", "cap", "jacket", "coat", "trousers", "pants", "jeans", "belt", "glasses", "watch", "sweater",
+            "scarf", "glove", "gloves", "boot", "boots",
+            "pen", "pencil", "paper", "cup", "mug", "glass", "keyboard", "mouse", "phone", "laptop", "computer", "monitor", "screen", "lamp", "book", "books",
+            "bottle", "notebook", "charger", "cable", "wallet", "key", "keys", "clock", "remote", "tissue", "plate", "bowl", "fork", "spoon", "knife", "napkin",
+            "sky", "tree", "trees", "grass", "cloud", "clouds", "sun", "car", "cars", "street", "road", "garden", "fence", "bush", "bird",
+        },
+        "places": {
+            "england", "scotland", "wales", "ireland", "france", "germany", "spain", "italy", "china", "japan", "india", "brazil", "canada", "mexico",
+            "egypt", "kenya", "russia", "america", "usa", "uk", "europe", "asia", "africa", "australia",
+            "london", "paris", "berlin", "rome", "madrid", "tokyo", "beijing", "moscow", "newyork", "chicago", "boston", "sydney", "dublin", "edinburgh", "manchester",
+        },
+        "brands": {
+            "google", "apple", "microsoft", "amazon", "facebook", "tesla", "nike", "adidas", "coca", "cola", "pepsi", "mcdonalds", "starbucks",
+            "samsung", "sony", "toyota", "ford", "bmw", "gucci", "prada", "disney", "netflix", "spotify", "ikea", "lego",
+        },
+        "names": set(),  # to be filled together
+    }
 
     @staticmethod
     def validate(word: str) -> bool:
@@ -87,6 +125,24 @@ class prep:
         """Return the non-stopword tokens of a phrase (lower-cased)."""
         tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
         return [t for t in tokens if t not in prep.STOPWORDS]
+
+    @staticmethod
+    def check_category(words: list, number_of_words: int = 5, category: str | None = None) -> bool:
+        """True if ≥ number_of_words of the words belong to the same category.
+
+        - category=None          → any category (SI Rule 2)
+        - category="environment" → environment objects (SI Rule 1)
+        - category="places"/"names"/"brands" with number_of_words=1 → SI Rule 3
+        """
+        targets = [category] if category else list(prep.CATEGORIES)
+        counts = {c: 0 for c in targets}
+
+        for w in words:
+            for name in targets:
+                if w in prep.CATEGORIES[name]:
+                    counts[name] += 1
+
+        return max(counts.values()) >= number_of_words
 
 
 class Model:
