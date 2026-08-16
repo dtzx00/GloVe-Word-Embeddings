@@ -1,7 +1,9 @@
 import os
 import pickle
+import re
 import shutil
 
+import numpy as np
 import requests
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
@@ -40,10 +42,8 @@ def clean_up():
 
 
 def validate(word: str) -> bool:
-    global _validated_words
-    if _validated_words is None:
-        _validated_words = load("olson-validated-words")
-    return word in _validated_words
+    """Backward-compatible wrapper. Prefer Preprocess.validate. """
+    return Preprocess.validate(word)
 
 
 def load(key: str, force_download: bool = False):
@@ -70,12 +70,52 @@ def load(key: str, force_download: bool = False):
             return {line.strip() for line in f if line.strip()}
 
 
+# --- preprocess / data cleaning -----------------------------------------
+
+class Preprocess:
+    STOPWORDS = {"a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with"}
+
+    @staticmethod
+    def validate(word: str) -> bool:
+        """True only for single words that appear in Olson’s validated list.
+        Multi-word phrases always return False.
+        """
+        global _validated_words
+        if _validated_words is None:
+            _validated_words = load("olson-validated-words")
+        if " " in word.strip():
+            return False
+        return word in _validated_words
+
+    @staticmethod
+    def remove_stopwords(phrase: str) -> list[str]:
+        """Return the non-stopword tokens of a phrase (lower-cased)."""
+        tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
+        return [t for t in tokens if t not in Preprocess.STOPWORDS]
+
+
 class Model:
     def __init__(self, vectors: dict):
         self.vectors = vectors
 
     def embed(self, word: str):
+        """Exact match only."""
         return self.vectors.get(word)
+
+    def embed_phrase(self, phrase: str):
+        """Original paper logic: try space/_/- variants, otherwise average non-stopword parts."""
+        phrase = phrase.strip().lower()
+        if not phrase:
+            return None
+
+        for variant in (phrase, phrase.replace(" ", "_"), phrase.replace(" ", "-")):
+            if variant in self.vectors:
+                return self.vectors[variant]
+
+        parts = [self.vectors[p] for p in Preprocess.remove_stopwords(phrase) if p in self.vectors]
+        if parts and len({p.shape for p in parts}) == 1:
+            return np.mean(np.stack(parts).astype(np.float32), axis=0)
+        return None
 
     def vocab(self):
         return set(self.vectors)
