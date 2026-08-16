@@ -41,11 +41,6 @@ def clean_up():
     _validated_words = None
 
 
-def validate(word: str) -> bool:
-    """Backward-compatible wrapper. Prefer Preprocess.validate. """
-    return Preprocess.validate(word)
-
-
 def load(key: str, force_download: bool = False):
     """Download `key` if not cached, then return a Model (or word set for the wordlist)."""
     if key not in FILES:
@@ -92,6 +87,11 @@ class Preprocess:
         """Return the non-stopword tokens of a phrase (lower-cased)."""
         tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
         return [t for t in tokens if t not in Preprocess.STOPWORDS]
+
+
+def validate(word: str) -> bool:
+    """Backward-compatible alias."""
+    return Preprocess.validate(word)
 
 
 class Model:

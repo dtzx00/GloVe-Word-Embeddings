@@ -19,12 +19,35 @@ model = gwe.load("glove-6b-300d")   # downloads on first use, caches locally
 model.embed("cat")             # -> np.ndarray or None if not in vocab
 model.vocab()                  # -> set of all words in the model
 
+# Multi-word phrases (original paper logic)
+model.embed_phrase("jar of jam")   # tries "jar of jam" / "jar_of_jam" / "jar-of-jam",
+                                   # otherwise averages the non-stopword parts
+
 gwe.validate("cat")            # -> True / False, checked against the validated word list
 
 gwe.clean_up()                 # deletes all cached files
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings` (override with `GLOVE_WORD_EMBEDDINGS_CACHE`).
+
+## Preprocess
+
+The package includes a small preprocessing helper for cleaning phrases before embedding.
+
+```python
+from glove_word_embeddings import Preprocess
+
+# Check against Olson’s validated single-word list
+Preprocess.validate("cat")          # True
+Preprocess.validate("jar of jam")   # False  (multi-word phrases always return False)
+
+# Remove common stopwords from a phrase
+Preprocess.remove_stopwords("jar of jam")   # ['jar', 'jam']
+```
+
+`Preprocess.validate` only returns `True` for single words that appear in the Olson validated word list. Multi-word phrases are always `False`.
+
+`Preprocess.remove_stopwords` is used internally by `model.embed_phrase()` when averaging the parts of multi-word expressions.
 
 ## Citation
 
@@ -41,4 +64,3 @@ Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E.
 National Academy of Sciences, 118(25), e2022340118.
 https://doi.org/10.1073/pnas.2022340118
 ```
-
