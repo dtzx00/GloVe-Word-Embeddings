@@ -89,11 +89,6 @@ class Preprocess:
         return [t for t in tokens if t not in Preprocess.STOPWORDS]
 
 
-def validate(word: str) -> bool:
-    """Backward-compatible alias."""
-    return Preprocess.validate(word)
-
-
 class Model:
     def __init__(self, vectors: dict):
         self.vectors = vectors
