@@ -1,8 +1,8 @@
 # GloVe-Word-Embeddings
 
-Library to quickly validate words and get them embedded for academic research. Design is based on Wang et al., 2026 (Nature Human Behaviour) and Olson et al., 2021 (PNAS).
+Library to quickly validate words and get them embedded for academic research. Design of this package is to reproduce and extend existing, published works: Wang et al., 2026 (Nature Human Behaviour) and Olson et al., 2021 (PNAS).
 
-This package has three parts: **prep** cleans and validates words, **cat** assigns semantic and proper-noun categories (SI Rules 1–3), and **model** loads embeddings and turns words or phrases into vectors.
+This package has three parts: **prep (preprocessing)** cleans and validates words, **cat (categorization)** assigns semantic and proper-noun categories, and **model (word embedding)** loads embeddings and turns words or phrases into vectors (embeddings are saved on my AWS S3 bucket and this package will pull from it automatically).
 
 ## Install
 
@@ -10,7 +10,7 @@ This package has three parts: **prep** cleans and validates words, **cat** assig
 pip install glove-word-embeddings
 ```
 
-NLTK WordNet and names data are downloaded automatically on first use of the category helpers (you will see a one-time message only when data is actually missing).
+This package is based on one major prerequisites, NLTK WordNet and names data are downloaded automatically on first use of the category helpers (you will see a one-time message only when data is actually missing). The convenience of this package is that I've pickled and saved embeddings on my AWS S3 bucket and this package will pull from it automatically. 
 
 ## 1. Preprocessing
 
