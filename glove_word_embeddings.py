@@ -2,11 +2,10 @@ import os
 import pickle
 import re
 import shutil
+from functools import lru_cache
 
 import numpy as np
 import requests
-from nltk.corpus import wordnet as wn
-from nltk.corpus import names as nltk_names
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
 CACHE_DIR = os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
@@ -32,6 +31,8 @@ FILES = {
 
 _validated_words = None
 _names = None
+_wn = None
+_nltk_ready = False
 
 
 def list_models():
@@ -39,10 +40,12 @@ def list_models():
 
 
 def clean_up():
-    global _validated_words, _names
+    global _validated_words, _names, _wn, _nltk_ready
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
     _validated_words = None
     _names = None
+    _wn = None
+    _nltk_ready = False
 
 
 def load(key: str, force_download: bool = False):
@@ -67,6 +70,41 @@ def load(key: str, force_download: bool = False):
     else:
         with open(path, "r", encoding="utf-8") as f:
             return {line.strip() for line in f if line.strip()}
+
+
+def _ensure_nltk():
+    """Download WordNet + names on first use and tell the user."""
+    global _nltk_ready, _wn, _names
+    if _nltk_ready:
+        return
+
+    import nltk
+    from nltk.corpus import wordnet, names
+
+    need = []
+    try:
+        wordnet.synsets("test")
+    except LookupError:
+        need.append("wordnet")
+    try:
+        names.words()
+    except LookupError:
+        need.append("names")
+
+    if need:
+        print(f"Downloading NLTK data ({', '.join(need)}) — one-time setup…")
+        for item in need:
+            ok = nltk.download(item, quiet=True)
+            if not ok:
+                raise RuntimeError(
+                    f"Failed to download NLTK '{item}'. "
+                    f"Run: python -c \"import nltk; nltk.download('{item}')\""
+                )
+        print("NLTK data ready.")
+
+    _wn = wordnet
+    _names = {n.lower() for n in names.words()}
+    _nltk_ready = True
 
 
 # --- prep / data cleaning -----------------------------------------
@@ -109,29 +147,43 @@ class prep:
             "google", "apple", "microsoft", "amazon", "facebook", "tesla", "nike", "adidas", "coca", "cola", "pepsi", "mcdonalds", "starbucks",
             "samsung", "sony", "toyota", "ford", "bmw", "gucci", "prada", "disney", "netflix", "spotify", "ikea", "lego",
         }),
-        "names": (None, None),  # filled lazily from nltk.corpus.names
+        "names": (None, None),  # filled from nltk.corpus.names on first use
     }
 
-    PROPER_NOUN_CATEGORIES = {"places", "names", "brands"}
+    # ----- word helpers (public) -----
 
     @staticmethod
-    def _get_names():
-        global _names
-        if _names is None:
-            _names = {n.lower() for n in nltk_names.words()}
-        return _names
+    def clean_word(word: str) -> str:
+        """Strip whitespace and lowercase."""
+        return word.strip().lower()
 
     @staticmethod
-    def validate(word: str) -> bool:
-        """True only for single words that appear in Olson’s validated list.
-        Multi-word phrases always return False.
+    def space_check(word: str) -> bool:
+        """True if the word is a single token (no spaces or hyphens)."""
+        w = word.strip()
+        return bool(w) and (" " not in w) and ("-" not in w)
+
+    @staticmethod
+    def word_validation(word: str, clean_word: bool = True, space_check: bool = True) -> bool:
+        """Look up the word in Olson’s validated list.
+
+        clean_word=True  → strip + lowercase before lookup
+        space_check=True → return False if the word contains spaces/hyphens
         """
         global _validated_words
         if _validated_words is None:
             _validated_words = load("olson-validated-words")
-        if " " in word.strip():
+
+        if clean_word:
+            word = prep.clean_word(word)
+        if space_check and not prep.space_check(word):
             return False
         return word in _validated_words
+
+    @staticmethod
+    def validate(word: str) -> bool:
+        """Convenience wrapper: clean + space check + Olson list lookup."""
+        return prep.word_validation(word, clean_word=True, space_check=True)
 
     @staticmethod
     def remove_stopwords(phrase: str) -> list[str]:
@@ -139,32 +191,47 @@ class prep:
         tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
         return [t for t in tokens if t not in prep.STOPWORDS]
 
+    # ----- category helpers -----
+
     @staticmethod
-    def check_category(word: str) -> set[str]:
+    @lru_cache(maxsize=None)
+    def check_category(word: str, check_common: bool = False) -> set:
         """Return the set of categories a single word belongs to.
 
-        Membership is decided by seed list or WordNet hypernym ancestry.
-        For places/names/brands the word must also have no WordNet sense
-        (i.e. it is a pure proper noun).
+        check_common=False (default):
+            trust the seed list (and WordNet ancestry). Used for places, environment, animals…
+        check_common=True:
+            for seed matches, also require that the word has *no* WordNet sense
+            (pure proper noun). Used for names and brands.
         """
-        word = word.strip().lower()
+        _ensure_nltk()
+        word = prep.clean_word(word)
+        if not word:
+            return set()
+
         out = set()
+        has_sense = len(_wn.synsets(word)) > 0
 
         for name, (syn, seeds) in prep.CATEGORIES.items():
             if name == "names":
-                seeds = prep._get_names()
+                seeds = _names
 
+            # seed hit
             if seeds is not None and word in seeds:
-                # proper-noun categories need the common-word filter
-                if name in prep.PROPER_NOUN_CATEGORIES and len(wn.synsets(word)) > 0:
+                if check_common and has_sense:
                     continue
                 out.add(name)
                 continue
 
+            # WordNet hypernym ancestry
             if syn is not None:
                 try:
-                    cat = wn.synset(syn)
-                    if any(cat in p for s in wn.synsets(word, pos=wn.NOUN) for p in s.hypernym_paths()):
+                    cat = _wn.synset(syn)
+                    if any(
+                        cat in p
+                        for s in _wn.synsets(word, pos=_wn.NOUN)
+                        for p in s.hypernym_paths()
+                    ):
                         out.add(name)
                 except Exception:
                     pass
@@ -172,23 +239,35 @@ class prep:
         return out
 
     @staticmethod
-    def count_categories(words: list, number_of_words: int = 5, category: str | None = None) -> bool:
+    def count_categories(
+        words: list,
+        number_of_words: int = 5,
+        category: str | None = None,
+        check_common: bool = False,
+    ) -> bool:
         """True if ≥ number_of_words of the words belong to the same category.
 
         - category=None          → any category (SI Rule 2)
         - category="environment" → environment objects (SI Rule 1)
-        - category="places"/"names"/"brands" with number_of_words=1 → SI Rule 3
+        - category="places"      → places (SI Rule 3, check_common=False)
+        - category="names"/"brands" with number_of_words=1 and check_common=True → SI Rule 3
         """
+        if category is not None and category not in prep.CATEGORIES:
+            raise ValueError(
+                f"Unknown category {category!r}. "
+                f"Valid categories: {sorted(prep.CATEGORIES)}"
+            )
+
         targets = [category] if category else list(prep.CATEGORIES)
         counts = {c: 0 for c in targets}
 
         for w in words:
-            cats = prep.check_category(w)
+            cats = prep.check_category(w, check_common=check_common)
             for name in targets:
                 if name in cats:
                     counts[name] += 1
 
-        return max(counts.values()) >= number_of_words
+        return max(counts.values()) >= number_of_words if counts else False
 
 
 class Model:
