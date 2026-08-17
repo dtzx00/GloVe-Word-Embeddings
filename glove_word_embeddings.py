@@ -2,10 +2,10 @@ import os
 import pickle
 import re
 import shutil
-from functools import lru_cache
 
 import numpy as np
 import requests
+import nltk
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
 CACHE_DIR = os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
@@ -31,7 +31,6 @@ FILES = {
 
 _validated_words = None
 _names = None
-_wn = None
 _nltk_ready = False
 
 
@@ -40,11 +39,10 @@ def list_models():
 
 
 def clean_up():
-    global _validated_words, _names, _wn, _nltk_ready
+    global _validated_words, _names, _nltk_ready
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
     _validated_words = None
     _names = None
-    _wn = None
     _nltk_ready = False
 
 
@@ -70,41 +68,6 @@ def load(key: str, force_download: bool = False):
     else:
         with open(path, "r", encoding="utf-8") as f:
             return {line.strip() for line in f if line.strip()}
-
-
-def _ensure_nltk():
-    """Download WordNet + names on first use and tell the user."""
-    global _nltk_ready, _wn, _names
-    if _nltk_ready:
-        return
-
-    import nltk
-    from nltk.corpus import wordnet, names
-
-    need = []
-    try:
-        wordnet.synsets("test")
-    except LookupError:
-        need.append("wordnet")
-    try:
-        names.words()
-    except LookupError:
-        need.append("names")
-
-    if need:
-        print(f"Downloading NLTK data ({', '.join(need)}) — one-time setup…")
-        for item in need:
-            ok = nltk.download(item, quiet=True)
-            if not ok:
-                raise RuntimeError(
-                    f"Failed to download NLTK '{item}'. "
-                    f"Run: python -c \"import nltk; nltk.download('{item}')\""
-                )
-        print("NLTK data ready.")
-
-    _wn = wordnet
-    _names = {n.lower() for n in names.words()}
-    _nltk_ready = True
 
 
 # --- prep / data cleaning -----------------------------------------
@@ -147,43 +110,59 @@ class prep:
             "google", "apple", "microsoft", "amazon", "facebook", "tesla", "nike", "adidas", "coca", "cola", "pepsi", "mcdonalds", "starbucks",
             "samsung", "sony", "toyota", "ford", "bmw", "gucci", "prada", "disney", "netflix", "spotify", "ikea", "lego",
         }),
-        "names": (None, None),  # filled from nltk.corpus.names on first use
+        "names": (None, None),  # filled lazily from nltk.corpus.names
     }
 
-    # ----- word helpers (public) -----
+    @staticmethod
+    def _ensure_nltk():
+        """Download WordNet and names on first use; raise clearly on failure."""
+        global _nltk_ready
+        if _nltk_ready:
+            return
+        for resource, path in (("wordnet", "corpora/wordnet"), ("names", "corpora/names")):
+            try:
+                nltk.data.find(path)
+            except LookupError:
+                print(f"Downloading NLTK '{resource}' data (one-time)…")
+                ok = nltk.download(resource, quiet=True)
+                if not ok:
+                    raise RuntimeError(
+                        f"Failed to download NLTK '{resource}' data. "
+                        f"Run: python -c \"import nltk; nltk.download('{resource}')\""
+                    )
+        _nltk_ready = True
+
+    @staticmethod
+    def _get_names():
+        global _names
+        prep._ensure_nltk()
+        if _names is None:
+            from nltk.corpus import names as nltk_names
+            _names = {n.lower() for n in nltk_names.words()}
+        return _names
 
     @staticmethod
     def clean_word(word: str) -> str:
-        """Strip whitespace and lowercase."""
+        """Strip and lowercase a word."""
         return word.strip().lower()
 
     @staticmethod
     def space_check(word: str) -> bool:
-        """True if the word is a single token (no spaces or hyphens)."""
+        """True if the word is a single token (no spaces, hyphens, underscores)."""
         w = word.strip()
-        return bool(w) and (" " not in w) and ("-" not in w)
+        return not any(c in w for c in (" ", "-", "_"))
 
     @staticmethod
     def word_validation(word: str, clean_word: bool = True, space_check: bool = True) -> bool:
-        """Look up the word in Olson’s validated list.
-
-        clean_word=True  → strip + lowercase before lookup
-        space_check=True → return False if the word contains spaces/hyphens
-        """
+        """True if the word appears in Olson’s validated single-word list."""
         global _validated_words
         if _validated_words is None:
             _validated_words = load("olson-validated-words")
 
-        if clean_word:
-            word = prep.clean_word(word)
-        if space_check and not prep.space_check(word):
+        w = prep.clean_word(word) if clean_word else word
+        if space_check and not prep.space_check(w):
             return False
-        return word in _validated_words
-
-    @staticmethod
-    def validate(word: str) -> bool:
-        """Convenience wrapper: clean + space check + Olson list lookup."""
-        return prep.word_validation(word, clean_word=True, space_check=True)
+        return w in _validated_words
 
     @staticmethod
     def remove_stopwords(phrase: str) -> list[str]:
@@ -191,50 +170,35 @@ class prep:
         tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
         return [t for t in tokens if t not in prep.STOPWORDS]
 
-    # ----- category helpers -----
-
     @staticmethod
-    @lru_cache(maxsize=None)
-    def check_category(word: str, check_common: bool = False) -> set:
+    def check_category(word: str, check_common: bool = False) -> set[str]:
         """Return the set of categories a single word belongs to.
 
-        check_common=False (default):
-            trust the seed list (and WordNet ancestry). Used for places, environment, animals…
-        check_common=True:
-            for seed matches, also require that the word has *no* WordNet sense
-            (pure proper noun). Used for names and brands.
+        Membership is decided by seed list or WordNet hypernym ancestry.
+        If check_common=True, a seed hit is kept only when the word has no
+        WordNet sense (pure proper noun). Use check_common=True for names/brands
+        and check_common=False for places.
         """
-        _ensure_nltk()
-        word = prep.clean_word(word)
-        if not word:
-            return set()
+        prep._ensure_nltk()
+        from nltk.corpus import wordnet as wn
 
+        word = prep.clean_word(word)
         out = set()
-        has_sense = len(_wn.synsets(word)) > 0
 
         for name, (syn, seeds) in prep.CATEGORIES.items():
             if name == "names":
-                seeds = _names
+                seeds = prep._get_names()
 
-            # seed hit
             if seeds is not None and word in seeds:
-                if check_common and has_sense:
+                if check_common and len(wn.synsets(word)) > 0:
                     continue
                 out.add(name)
                 continue
 
-            # WordNet hypernym ancestry
             if syn is not None:
-                try:
-                    cat = _wn.synset(syn)
-                    if any(
-                        cat in p
-                        for s in _wn.synsets(word, pos=_wn.NOUN)
-                        for p in s.hypernym_paths()
-                    ):
-                        out.add(name)
-                except Exception:
-                    pass
+                cat = wn.synset(syn)
+                if any(cat in p for s in wn.synsets(word, pos=wn.NOUN) for p in s.hypernym_paths()):
+                    out.add(name)
 
         return out
 
@@ -249,13 +213,12 @@ class prep:
 
         - category=None          → any category (SI Rule 2)
         - category="environment" → environment objects (SI Rule 1)
-        - category="places"      → places (SI Rule 3, check_common=False)
-        - category="names"/"brands" with number_of_words=1 and check_common=True → SI Rule 3
+        - category="places" with check_common=False, number_of_words=1 → SI Rule 3 places
+        - category="names"/"brands" with check_common=True, number_of_words=1 → SI Rule 3
         """
         if category is not None and category not in prep.CATEGORIES:
             raise ValueError(
-                f"Unknown category {category!r}. "
-                f"Valid categories: {sorted(prep.CATEGORIES)}"
+                f"Unknown category {category!r}. Valid categories: {sorted(prep.CATEGORIES)}"
             )
 
         targets = [category] if category else list(prep.CATEGORIES)
@@ -267,7 +230,7 @@ class prep:
                 if name in cats:
                     counts[name] += 1
 
-        return max(counts.values()) >= number_of_words if counts else False
+        return max(counts.values()) >= number_of_words
 
 
 class Model:

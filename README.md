@@ -8,11 +8,7 @@ Library to quickly validate words and get them embedded for academic research.
 pip install glove-word-embeddings
 ```
 
-Also required (for category checks):
-
-```bash
-python -c "import nltk; nltk.download('wordnet'); nltk.download('names')"
-```
+NLTK data (WordNet + names) is downloaded automatically on first use of the category functions.
 
 ## Preprocessing
 
@@ -21,26 +17,33 @@ Helpers for preparing words or phrases before embedding.
 ```python
 from glove_word_embeddings import prep
 
-# Check against Olson’s validated single-word list
-prep.validate("cat")          # True
-prep.validate("jar of jam")   # False  (multi-word phrases always return False)
+# Normalize a word
+prep.clean_word("  Cat ")       # "cat"
+
+# True if single token (no spaces / hyphens / underscores)
+prep.space_check("cat")         # True
+prep.space_check("jar of jam")  # False
+
+# Look up Olson’s validated single-word list
+prep.word_validation("cat")                    # True
+prep.word_validation("jar of jam")             # False
+prep.word_validation("  Cat ")                 # True  (cleaned by default)
 
 # Remove common stopwords from a phrase
-prep.remove_stopwords("jar of jam")   # ['jar', 'jam']
+prep.remove_stopwords("jar of jam")            # ['jar', 'jam']
 
 # Which categories does a single word belong to?
-prep.check_category("dog")    # {"animals"}
-prep.check_category("apple")  # {"fruits"}   (not brands – it is a common word)
+prep.check_category("dog")                     # {"animals"}
+prep.check_category("paris", check_common=False)   # {"places"}
+prep.check_category("apple", check_common=True)    # {"fruits"}  (not brands)
 
 # Count categories across a list of words (SI Rules 1–3)
-prep.count_categories(words)                          # Rule 2 (any category ≥ 5)
-prep.count_categories(words, category="environment")  # Rule 1
-prep.count_categories(words, category="places", number_of_words=1)  # Rule 3
-prep.count_categories(words, category="names",  number_of_words=1)
-prep.count_categories(words, category="brands", number_of_words=1)
+prep.count_categories(words)                                      # Rule 2 (any category ≥ 5)
+prep.count_categories(words, category="environment")              # Rule 1
+prep.count_categories(words, category="places", number_of_words=1, check_common=False)  # Rule 3 places
+prep.count_categories(words, category="names",  number_of_words=1, check_common=True)   # Rule 3 names
+prep.count_categories(words, category="brands", number_of_words=1, check_common=True)   # Rule 3 brands
 ```
-
-`prep.validate` returns `True` for words that appear in Olson et al. (2021)'s validated word list.
 
 ## Usage
 
