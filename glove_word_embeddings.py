@@ -1,10 +1,17 @@
 from __future__ import annotations
-import os, pickle, re, shutil, requests, nltk, numpy as np
+from importlib.metadata import PackageNotFoundError, version
+try:
+    __version__ = version("glove-word-embeddings")
+except PackageNotFoundError:
+    __version__ = "0.0.0+local"    
+import os,pickle,re,shutil,requests,nltk,numpy as np
+
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
 CACHE_DIR = \
 os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or \
 os.path.expanduser("~/.cache/glove-word-embeddings")
+
 
 FILES = {
     "glove-840b-300d": "glove.840B.300d.pickle",
