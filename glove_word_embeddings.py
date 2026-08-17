@@ -29,8 +29,8 @@ FILES = {
 }
 
 
-_validated_words = None
-_names = None
+_valid_words = None
+_nltk_names = None
 _nltk_ready = False
 
 
@@ -39,10 +39,10 @@ def list_models():
 
 
 def clean_up():
-    global _validated_words, _names, _nltk_ready
+    global _valid_words, _nltk_names, _nltk_ready
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
-    _validated_words = None
-    _names = None
+    _valid_words = None
+    _nltk_names = None
     _nltk_ready = False
 
 
@@ -133,13 +133,13 @@ class prep:
         _nltk_ready = True
 
     @staticmethod
-    def _get_names():
-        global _names
+    def _get_nltk_names():
+        global _nltk_names
         prep._ensure_nltk()
-        if _names is None:
+        if _nltk_names is None:
             from nltk.corpus import names as nltk_names
-            _names = {n.lower() for n in nltk_names.words()}
-        return _names
+            _nltk_names = {n.lower() for n in nltk_names.words()}
+        return _nltk_names
 
     @staticmethod
     def clean_word(word: str) -> str:
@@ -155,14 +155,30 @@ class prep:
     @staticmethod
     def word_validation(word: str, clean_word: bool = True, space_check: bool = True) -> bool:
         """True if the word appears in Olson’s validated single-word list."""
-        global _validated_words
-        if _validated_words is None:
-            _validated_words = load("olson-validated-words")
+        global _valid_words
+        if _valid_words is None:
+            _valid_words = load("olson-validated-words")
 
         w = prep.clean_word(word) if clean_word else word
         if space_check and not prep.space_check(w):
             return False
-        return w in _validated_words
+        return w in _valid_words
+
+    @staticmethod
+    def check_common(word: str, n_senses: int = 2) -> bool:
+        """True if the word has at least n_senses common-noun senses in WordNet.
+
+        Proper nouns (Aaron, London, Nike) are stored in WordNet as 'instance'
+        synsets, so they are not counted. A word only counts as common if it has
+        enough ordinary noun senses of its own — this is what separates 'apple'
+        (the fruit) from 'nike' (only ever a name).
+        """
+        prep._ensure_nltk()
+        from nltk.corpus import wordnet as wn
+
+        word = prep.clean_word(word)
+        common = [s for s in wn.synsets(word, pos=wn.NOUN) if not s.instance_hypernyms()]
+        return len(common) >= n_senses
 
     @staticmethod
     def remove_stopwords(phrase: str) -> list[str]:
@@ -171,13 +187,13 @@ class prep:
         return [t for t in tokens if t not in prep.STOPWORDS]
 
     @staticmethod
-    def check_category(word: str, check_common: bool = False) -> set[str]:
+    def check_category(word: str, check_common: bool = False, n_senses: int = 2) -> set[str]:
         """Return the set of categories a single word belongs to.
 
         Membership is decided by seed list or WordNet hypernym ancestry.
-        If check_common=True, a seed hit is kept only when the word has no
-        WordNet sense (pure proper noun). Use check_common=True for names/brands
-        and check_common=False for places.
+        If check_common=True, a seed hit is dropped when check_common(word,
+        n_senses) says the word is an ordinary common word — so 'apple' is not
+        flagged as a brand, while 'nike' and 'aaron' still are.
         """
         prep._ensure_nltk()
         from nltk.corpus import wordnet as wn
@@ -187,13 +203,13 @@ class prep:
 
         for name, (syn, seeds) in prep.CATEGORIES.items():
             if name == "names":
-                seeds = prep._get_names()
+                seeds = prep._get_nltk_names()
 
             if seeds is not None and word in seeds:
-                if check_common and len(wn.synsets(word)) > 0:
+                if not (check_common and prep.check_common(word, n_senses)):
+                    out.add(name)
                     continue
-                out.add(name)
-                continue
+                # common word: fall through to the WordNet check below
 
             if syn is not None:
                 cat = wn.synset(syn)
@@ -208,6 +224,7 @@ class prep:
         number_of_words: int = 5,
         category: str | None = None,
         check_common: bool = False,
+        n_senses: int = 2,
     ) -> bool:
         """True if ≥ number_of_words of the words belong to the same category.
 
@@ -225,7 +242,7 @@ class prep:
         counts = {c: 0 for c in targets}
 
         for w in words:
-            cats = prep.check_category(w, check_common=check_common)
+            cats = prep.check_category(w, check_common=check_common, n_senses=n_senses)
             for name in targets:
                 if name in cats:
                     counts[name] += 1
@@ -237,17 +254,22 @@ class Model:
     def __init__(self, vectors: dict):
         self.vectors = vectors
 
-    def embed(self, word: str):
-        """Exact match only."""
+    def embed_exact(self, word: str):
+        """Embed using exact match only."""
         return self.vectors.get(word)
 
     def embed_phrase(self, phrase: str):
-        """Original paper logic: try space/_/- variants, otherwise average non-stopword parts."""
+        """Embed by trying space/_/- variants, otherwise 
+        average embeddings of non-stopword parts."""
         phrase = phrase.strip().lower()
         if not phrase:
             return None
 
-        for variant in (phrase, phrase.replace(" ", "_"), phrase.replace(" ", "-")):
+        for variant in (
+            phrase, 
+            phrase.replace(" ", "_"), 
+            phrase.replace(" ", "-")):
+            
             if variant in self.vectors:
                 return self.vectors[variant]
 
@@ -256,5 +278,6 @@ class Model:
             return np.mean(np.stack(parts).astype(np.float32), axis=0)
         return None
 
-    def vocab(self):
+    def vocab_set(self):
+        """Full set of vocabulary in the embedding."""
         return set(self.vectors)
