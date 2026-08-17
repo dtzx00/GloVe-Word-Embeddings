@@ -1,6 +1,8 @@
 # GloVe-Word-Embeddings
 
-Library to quickly validate words and get them embedded for academic research.
+Library to quickly validate words and get them embedded for academic research. Design is based on Wang et al., 2026 (Nature Human Behaviour) and Olson et al., 2021 (PNAS).
+
+This package has three parts: **prep** cleans and validates words, **cat** assigns semantic and proper-noun categories (SI Rules 1–3), and **model** loads embeddings and turns words or phrases into vectors.
 
 ## Install
 
@@ -8,59 +10,74 @@ Library to quickly validate words and get them embedded for academic research.
 pip install glove-word-embeddings
 ```
 
-NLTK data (WordNet + names) is downloaded automatically on first use of the category functions.
+NLTK WordNet and names data are downloaded automatically on first use of the category helpers (you will see a one-time message only when data is actually missing).
 
-## Preprocessing
+## 1. Preprocessing
 
-Helpers for preparing words or phrases before embedding.
+Clean raw text and check it against Olson’s validated word list.
 
 ```python
 from glove_word_embeddings import prep
 
-# Normalize a word
-prep.clean_word("  Cat ")       # "cat"
+prep.clean_word("  Cat ")            # "cat"
+prep.space_check("cat")              # True
+prep.space_check("jar of jam")       # False
+prep.remove_stopwords("jar of jam")  # ['jar', 'jam']
 
-# True if single token (no spaces / hyphens / underscores)
-prep.space_check("cat")         # True
-prep.space_check("jar of jam")  # False
-
-# Look up Olson’s validated single-word list
-prep.word_validation("cat")                    # True
-prep.word_validation("jar of jam")             # False
-prep.word_validation("  Cat ")                 # True  (cleaned by default)
-
-# Remove common stopwords from a phrase
-prep.remove_stopwords("jar of jam")            # ['jar', 'jam']
-
-# Which categories does a single word belong to?
-prep.check_category("dog")                     # {"animals"}
-prep.check_category("paris", check_common=False)   # {"places"}
-prep.check_category("apple", check_common=True)    # {"fruits"}  (not brands)
-
-# Count categories across a list of words (SI Rules 1–3)
-prep.count_categories(words)                                      # Rule 2 (any category ≥ 5)
-prep.count_categories(words, category="environment")              # Rule 1
-prep.count_categories(words, category="places", number_of_words=1, check_common=False)  # Rule 3 places
-prep.count_categories(words, category="names",  number_of_words=1, check_common=True)   # Rule 3 names
-prep.count_categories(words, category="brands", number_of_words=1, check_common=True)   # Rule 3 brands
+# Ends with validation against Olson’s single-word list
+prep.word_validation("cat")          # True
+prep.word_validation("jar of jam")   # False
+prep.word_validation("  Cat ")       # True  (cleaned by default)
 ```
 
-## Usage
+## 2. Categorization
+
+Flag responses that lean too heavily on one semantic group, room objects, or pure proper nouns (SI Rules 1–3).
+
+```python
+from glove_word_embeddings import cat
+
+# Ordinary common word? (ignores WordNet proper-noun instances)
+cat.check_common("apple")   # True
+cat.check_common("nike")    # False
+cat.check_common("aaron")   # False
+
+# Which categories does one word belong to?
+cat.check("dog")                           # {"animals"}
+cat.check("paris", check_common=False)     # {"places"}
+cat.check("apple", check_common=True)      # {"fruits"}  (not brands)
+
+# Count across a response
+cat.count(words)  # Rule 2: any category ≥ 5
+cat.count(words, name="environment")  # Rule 1
+cat.count(words, name="places", number_of_words=1, check_common=False)  # Rule 3 places
+cat.count(words, name="names",  number_of_words=1, check_common=True)   # Rule 3 names
+cat.count(words, name="brands", number_of_words=1, check_common=True)   # Rule 3 brands
+```
+
+`check_common=False` trusts the seed list (places, environment, semantic groups).  
+`check_common=True` drops a seed hit when the word is an ordinary common word (names / brands).
+
+Unknown `name=` values raise `ValueError`.
+
+## 3. Embedding
+
+Load a vector model and embed single words or short phrases.
 
 ```python
 import glove_word_embeddings as gwe
 
-gwe.list_models()              # {key: filename, ...}
+gwe.list_models()                 # {key: filename, ...}
 
-model = gwe.load("glove-6b-300d")   # downloads on first use, caches locally
-model.embed("cat")             # exact match only -> np.ndarray or None
-model.vocab()                  # -> set of all words in the model
+m = gwe.load("glove-6b-300d")     # downloads on first use, caches locally
+m.embed_exact("cat")              # exact match only -> np.ndarray or None
+m.vocab_set()                     # -> set of all words in the model
 
 # Multi-word phrases
-model.embed_phrase("jar of jam")   # tries "jar of jam" / "jar_of_jam" / "jar-of-jam",
-                                   # otherwise averages the non-stopword parts
+m.embed_phrase("jar of jam")      # tries "jar of jam" / "jar_of_jam" / "jar-of-jam",
+                                  # otherwise averages the non-stopword parts
 
-gwe.clean_up()                 # deletes all cached files
+gwe.clean_up()                    # deletes all cached files
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings`.

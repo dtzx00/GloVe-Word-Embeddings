@@ -8,9 +8,9 @@ import requests
 import nltk
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
-CACHE_DIR = os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
-    "~/.cache/glove-word-embeddings"
-)
+CACHE_DIR = \
+os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or \
+os.path.expanduser("~/.cache/glove-word-embeddings")
 
 FILES = {
     "glove-840b-300d": "glove.840B.300d.pickle",
@@ -25,8 +25,7 @@ FILES = {
     "flair-olson-twitter": "flair_olson_common_words_twitter.pickle",
     "flair-olson-turian": "flair_olson_common_words_turian.pickle",
     "flair-olson-random": "flair_olson_common_words_random.pickle",
-    "olson-validated-words": "olson_validated_100k_words.txt",
-}
+    "olson-validated-words": "olson_validated_100k_words.txt"}
 
 
 _valid_words = None
@@ -47,7 +46,7 @@ def clean_up():
 
 
 def load(key: str, force_download: bool = False):
-    """Download `key` if not cached, then return a Model (or word set for the wordlist)."""
+    """Download `key` if not cached, then return a model (or word set for the wordlist)."""
     if key not in FILES:
         raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES)}")
 
@@ -64,18 +63,51 @@ def load(key: str, force_download: bool = False):
 
     if filename.endswith(".pickle"):
         with open(path, "rb") as f:
-            return Model(pickle.load(f))
+            return model(pickle.load(f))
     else:
         with open(path, "r", encoding="utf-8") as f:
             return {line.strip() for line in f if line.strip()}
 
 
-# --- prep / data cleaning -----------------------------------------
+# --- 1. prep: clean and validate words -------------------------------------
 
 class prep:
     STOPWORDS = {"a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with"}
 
-    # category -> (WordNet ancestor synset or None, seed words)
+    @staticmethod
+    def clean_word(word: str) -> str:
+        """Strip and lowercase a word."""
+        return word.strip().lower()
+
+    @staticmethod
+    def space_check(word: str) -> bool:
+        """True if the word is a single token (no spaces, hyphens, underscores)."""
+        w = word.strip()
+        return not any(c in w for c in (" ", "-", "_"))
+
+    @staticmethod
+    def remove_stopwords(phrase: str) -> list[str]:
+        """Return the non-stopword tokens of a phrase (lower-cased)."""
+        tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
+        return [t for t in tokens if t not in prep.STOPWORDS]
+
+    @staticmethod
+    def word_validation(word: str, clean_word: bool = True, space_check: bool = True) -> bool:
+        """True if the word appears in Olson’s validated single-word list."""
+        global _valid_words
+        if _valid_words is None:
+            _valid_words = load("olson-validated-words")
+
+        w = prep.clean_word(word) if clean_word else word
+        if space_check and not prep.space_check(w):
+            return False
+        return w in _valid_words
+
+
+# --- 2. cat: semantic / proper-noun category checks ------------------------
+
+class cat:
+    # name -> (WordNet ancestor synset or None, seed words)
     CATEGORIES = {
         "animals": ("animal.n.01", {"dog", "cat", "lion", "tiger", "bear", "elephant", "horse", "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit", "monkey", "zebra", "giraffe", "kangaroo", "whale", "dolphin", "shark", "snake", "frog", "goose", "duck", "chicken", "hippo", "rhino", "leopard", "cheetah", "panda", "koala", "otter"}),
         "birds": ("bird.n.01", {"robin", "sparrow", "eagle", "hawk", "owl", "parrot", "penguin", "crow", "pigeon", "swan", "flamingo", "peacock", "finch"}),
@@ -115,54 +147,61 @@ class prep:
 
     @staticmethod
     def _ensure_nltk():
-        """Download WordNet and names on first use; raise clearly on failure."""
+        """Download WordNet and names on first use; raise clearly on failure.
+
+        Uses a functional check (can we look up a word?) instead of path probing,
+        because WordNet is often stored as corpora/wordnet.zip and never unpacked.
+        """
         global _nltk_ready
         if _nltk_ready:
             return
-        for resource, path in (("wordnet", "corpora/wordnet"), ("names", "corpora/names")):
+
+        from nltk.corpus import wordnet, names
+
+        try:
+            wordnet.synsets("dog")
+        except LookupError:
+            print("Downloading NLTK 'wordnet' data (one-time)…")
+            ok = nltk.download("wordnet", quiet=True)
+            if not ok:
+                raise RuntimeError(
+                    "Failed to download NLTK 'wordnet' data. "
+                    'Run: python -c "import nltk; nltk.download(\'wordnet\')"'
+                )
             try:
-                nltk.data.find(path)
-            except LookupError:
-                print(f"Downloading NLTK '{resource}' data (one-time)…")
-                ok = nltk.download(resource, quiet=True)
-                if not ok:
-                    raise RuntimeError(
-                        f"Failed to download NLTK '{resource}' data. "
-                        f"Run: python -c \"import nltk; nltk.download('{resource}')\""
-                    )
+                wordnet.synsets("dog")
+            except LookupError as e:
+                raise RuntimeError(
+                    "NLTK 'wordnet' data is still unavailable after download."
+                ) from e
+
+        try:
+            names.words()
+        except LookupError:
+            print("Downloading NLTK 'names' data (one-time)…")
+            ok = nltk.download("names", quiet=True)
+            if not ok:
+                raise RuntimeError(
+                    "Failed to download NLTK 'names' data. "
+                    'Run: python -c "import nltk; nltk.download(\'names\')"'
+                )
+            try:
+                names.words()
+            except LookupError as e:
+                raise RuntimeError(
+                    "NLTK 'names' data is still unavailable after download."
+                ) from e
+
         _nltk_ready = True
 
     @staticmethod
     def _get_nltk_names():
         global _nltk_names
-        prep._ensure_nltk()
+        cat._ensure_nltk()
         if _nltk_names is None:
             from nltk.corpus import names as nltk_names
             _nltk_names = {n.lower() for n in nltk_names.words()}
         return _nltk_names
-
-    @staticmethod
-    def clean_word(word: str) -> str:
-        """Strip and lowercase a word."""
-        return word.strip().lower()
-
-    @staticmethod
-    def space_check(word: str) -> bool:
-        """True if the word is a single token (no spaces, hyphens, underscores)."""
-        w = word.strip()
-        return not any(c in w for c in (" ", "-", "_"))
-
-    @staticmethod
-    def word_validation(word: str, clean_word: bool = True, space_check: bool = True) -> bool:
-        """True if the word appears in Olson’s validated single-word list."""
-        global _valid_words
-        if _valid_words is None:
-            _valid_words = load("olson-validated-words")
-
-        w = prep.clean_word(word) if clean_word else word
-        if space_check and not prep.space_check(w):
-            return False
-        return w in _valid_words
 
     @staticmethod
     def check_common(word: str, n_senses: int = 2) -> bool:
@@ -173,7 +212,7 @@ class prep:
         enough ordinary noun senses of its own — this is what separates 'apple'
         (the fruit) from 'nike' (only ever a name).
         """
-        prep._ensure_nltk()
+        cat._ensure_nltk()
         from nltk.corpus import wordnet as wn
 
         word = prep.clean_word(word)
@@ -181,76 +220,75 @@ class prep:
         return len(common) >= n_senses
 
     @staticmethod
-    def remove_stopwords(phrase: str) -> list[str]:
-        """Return the non-stopword tokens of a phrase (lower-cased)."""
-        tokens = re.findall(r"[a-z]+(?:'[a-z]+)?|\d+", phrase.lower())
-        return [t for t in tokens if t not in prep.STOPWORDS]
-
-    @staticmethod
-    def check_category(word: str, check_common: bool = False, n_senses: int = 2) -> set[str]:
-        """Return the set of categories a single word belongs to.
+    def check(word: str, check_common: bool = False, n_senses: int = 2) -> set[str]:
+        """Return the set of category names a single word belongs to.
 
         Membership is decided by seed list or WordNet hypernym ancestry.
-        If check_common=True, a seed hit is dropped when check_common(word,
-        n_senses) says the word is an ordinary common word — so 'apple' is not
-        flagged as a brand, while 'nike' and 'aaron' still are.
+        If check_common=True, a seed hit is dropped when the word is an ordinary
+        common word — so 'apple' is not flagged as a brand, while 'nike' is.
         """
-        prep._ensure_nltk()
+        cat._ensure_nltk()
         from nltk.corpus import wordnet as wn
 
         word = prep.clean_word(word)
         out = set()
 
-        for name, (syn, seeds) in prep.CATEGORIES.items():
+        for name, (syn, seeds) in cat.CATEGORIES.items():
             if name == "names":
-                seeds = prep._get_nltk_names()
+                seeds = cat._get_nltk_names()
 
             if seeds is not None and word in seeds:
-                if not (check_common and prep.check_common(word, n_senses)):
+                if not (check_common and cat.check_common(word, n_senses)):
                     out.add(name)
                     continue
                 # common word: fall through to the WordNet check below
 
             if syn is not None:
-                cat = wn.synset(syn)
-                if any(cat in p for s in wn.synsets(word, pos=wn.NOUN) for p in s.hypernym_paths()):
+                ancestor = wn.synset(syn)
+                if any(
+                    ancestor in path
+                    for s in wn.synsets(word, pos=wn.NOUN)
+                    for path in s.hypernym_paths()
+                ):
                     out.add(name)
 
         return out
 
     @staticmethod
-    def count_categories(
+    def count(
         words: list,
         number_of_words: int = 5,
-        category: str | None = None,
+        name: str | None = None,
         check_common: bool = False,
         n_senses: int = 2,
     ) -> bool:
         """True if ≥ number_of_words of the words belong to the same category.
 
-        - category=None          → any category (SI Rule 2)
-        - category="environment" → environment objects (SI Rule 1)
-        - category="places" with check_common=False, number_of_words=1 → SI Rule 3 places
-        - category="names"/"brands" with check_common=True, number_of_words=1 → SI Rule 3
+        - name=None          → any category (SI Rule 2)
+        - name="environment" → environment objects (SI Rule 1)
+        - name="places" with check_common=False, number_of_words=1 → SI Rule 3 places
+        - name="names"/"brands" with check_common=True, number_of_words=1 → SI Rule 3
         """
-        if category is not None and category not in prep.CATEGORIES:
+        if name is not None and name not in cat.CATEGORIES:
             raise ValueError(
-                f"Unknown category {category!r}. Valid categories: {sorted(prep.CATEGORIES)}"
+                f"Unknown category {name!r}. Valid names: {sorted(cat.CATEGORIES)}"
             )
 
-        targets = [category] if category else list(prep.CATEGORIES)
+        targets = [name] if name else list(cat.CATEGORIES)
         counts = {c: 0 for c in targets}
 
         for w in words:
-            cats = prep.check_category(w, check_common=check_common, n_senses=n_senses)
-            for name in targets:
-                if name in cats:
-                    counts[name] += 1
+            found = cat.check(w, check_common=check_common, n_senses=n_senses)
+            for key in targets:
+                if key in found:
+                    counts[key] += 1
 
         return max(counts.values()) >= number_of_words
 
 
-class Model:
+# --- 3. model: word embeddings ---------------------------------------------
+
+class model:
     def __init__(self, vectors: dict):
         self.vectors = vectors
 
@@ -259,17 +297,17 @@ class Model:
         return self.vectors.get(word)
 
     def embed_phrase(self, phrase: str):
-        """Embed by trying space/_/- variants, otherwise 
+        """Embed by trying space/_/- variants, otherwise
         average embeddings of non-stopword parts."""
         phrase = phrase.strip().lower()
         if not phrase:
             return None
 
         for variant in (
-            phrase, 
-            phrase.replace(" ", "_"), 
-            phrase.replace(" ", "-")):
-            
+            phrase,
+            phrase.replace(" ", "_"),
+            phrase.replace(" ", "-"),
+        ):
             if variant in self.vectors:
                 return self.vectors[variant]
 
