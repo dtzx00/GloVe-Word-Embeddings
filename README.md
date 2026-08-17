@@ -4,12 +4,12 @@ Library to quickly validate words and get them embedded for academic research. D
 
 This package has four parts:
 
-1. **prep** — clean and normalize words  
+1. **pre** — clean and normalize words  
 2. **val** — validate against Olson’s list and WordNet nouns  
 3. **cat** — assign semantic / proper-noun categories (SI Rules 1–3)  
-4. **model** — load embeddings and turn words or phrases into vectors  
+4. **mod** — load embeddings and turn words or phrases into vectors  
 
-Embeddings are hosted on an AWS S3 bucket and downloaded automatically on first use.
+Helpers `list_models` and `clean_up` live at module level. Embeddings are hosted on an AWS S3 bucket and downloaded automatically on first use.
 
 ## Install
 
@@ -19,21 +19,21 @@ pip install glove-word-embeddings
 
 NLTK WordNet and names data are downloaded automatically on first use of the category or noun helpers (a message appears only when data is actually missing).
 
-## 1. Preprocessing (`prep`)
+## 1. Preprocessing (`pre`)
 
 Clean raw text before validation or embedding.
 
 ```python
-from glove_word_embeddings import prep
+from glove_word_embeddings import pre
 
-prep.strip_word("  Cat! ")           # "cat"
-prep.space_check("cat")              # True
-prep.space_check("jar of jam")       # False
-prep.remove_stopwords("jar of jam")  # ['jar', 'jam']
+pre.strip_word("  Cat! ")           # "cat"
+pre.space_check("cat")              # True
+pre.space_check("jar of jam")       # False
+pre.remove_stopwords("jar of jam")  # ['jar', 'jam']
 
-prep.clean_word("  The Cat! ")       # "cat"  (strip + drop stopwords)
-prep.clean_word("jar of jam")        # "jar jam"
-prep.clean_word("the", stopwords=False)  # "the"
+pre.clean_word("  The Cat! ")       # "cat"  (strip + drop stopwords)
+pre.clean_word("jar of jam")        # "jar jam"
+pre.clean_word("the", stopwords=False)  # "the"
 ```
 
 ## 2. Validation (`val`)
@@ -79,17 +79,18 @@ cat.count(words, name="brands", number_of_words=1, check_common=True)   # Rule 3
 
 Unknown `name=` values raise `ValueError`.
 
-## 4. Embedding (`model`)
+## 4. Embedding (`mod`)
 
 Load a vector model and embed single words or short phrases.
 
 ```python
 import glove_word_embeddings as gwe
+from glove_word_embeddings import mod
 
 gwe.__version__                   # installed package version
 gwe.list_models()                 # {key: filename, ...}
 
-m = gwe.load("glove-6b-300d")     # downloads on first use, caches locally
+m = mod.load("glove-6b-300d")     # downloads on first use, caches locally
 m.embed_exact("cat")              # exact match only -> np.ndarray or None
 m.vocab_set()                     # -> set of all words in the model
 
