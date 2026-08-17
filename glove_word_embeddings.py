@@ -1,11 +1,5 @@
-import os
-import pickle
-import re
-import shutil
-
-import numpy as np
-import requests
-import nltk
+from __future__ import annotations
+import os, pickle, re, shutil, requests, nltk, numpy as np
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
 CACHE_DIR = \
