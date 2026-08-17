@@ -10,11 +10,11 @@ This package has three parts: **prep (preprocessing)** cleans and validates word
 pip install glove-word-embeddings
 ```
 
-This package is based on one major prerequisites, NLTK WordNet and names data are downloaded automatically on first use of the category helpers (you will see a one-time message only when data is actually missing). The convenience of this package is that I've pickled and saved embeddings on my AWS S3 bucket and this package will pull from it automatically. 
+This package is based on NLTK WordNet and names. NLTK data are downloaded automatically on first use of the category helpers (you will see a one-time message only when data is actually missing). Another convenience this package brings is I've pickled and saved embeddings on my AWS S3 bucket and this package will pull from it automatically, similar to NLTK data. 
 
-## 1. Preprocessing
+## 1. Preprocessing (prep)
 
-Clean raw text and check it against Olson’s validated word list.
+Clean raw text and check it against Olson et al., (2021)’s validated word list.
 
 ```python
 from glove_word_embeddings import prep
@@ -30,9 +30,9 @@ prep.word_validation("jar of jam")   # False
 prep.word_validation("  Cat ")       # True  (cleaned by default)
 ```
 
-## 2. Categorization
+## 2. Categorization (cat)
 
-Flag responses that lean too heavily on one semantic group, room objects, or pure proper nouns (SI Rules 1–3).
+Flag responses that lean too heavily on one semantic group, room objects, or pure proper nouns.
 
 ```python
 from glove_word_embeddings import cat
@@ -60,7 +60,7 @@ cat.count(words, name="brands", number_of_words=1, check_common=True)   # Rule 3
 
 Unknown `name=` values raise `ValueError`.
 
-## 3. Embedding
+## 3. Word Embedding (model)
 
 Load a vector model and embed single words or short phrases.
 
@@ -84,13 +84,13 @@ Files are cached in `~/.cache/glove-word-embeddings`.
 
 ## Citations
 
-Wang et al., (2026)
+Wang et al., (2026) -- Please cite my work, thanks. 
 ```
 Wang, D., Huang, D., Shen, H., & Uzzi, B. (2026). A large-scale comparison of
 divergent creativity in humans and large language models. Nature Human
 Behaviour, 10(3), 531–540. https://doi.org/10.1038/s41562-025-02331-1
 ```
-Olson et al., (2021)
+Olson et al., (2021) -- Embedding based creativity task.
 ```
 Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E.
 (2021). Naming unrelated words predicts creativity. Proceedings of the
