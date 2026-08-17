@@ -1,8 +1,15 @@
 # GloVe-Word-Embeddings
 
-Library to quickly validate words and get them embedded for academic research. Design of this package is to reproduce and extend existing, published works: Wang et al., 2026 (Nature Human Behaviour) and Olson et al., 2021 (PNAS).
+Library to quickly validate words and get them embedded for academic research. Design is based on Wang et al., 2026 (Nature Human Behaviour) and Olson et al., 2021 (PNAS).
 
-This package has three parts: **prep (preprocessing)** cleans and validates words, **cat (categorization)** assigns semantic and proper-noun categories, and **model (word embedding)** loads embeddings and turns words or phrases into vectors (embeddings are saved on my AWS S3 bucket and this package will pull from it automatically).
+This package has four parts:
+
+1. **prep** — clean and normalize words  
+2. **val** — validate against Olson’s list and WordNet nouns  
+3. **cat** — assign semantic / proper-noun categories (SI Rules 1–3)  
+4. **model** — load embeddings and turn words or phrases into vectors  
+
+Embeddings are hosted on an AWS S3 bucket and downloaded automatically on first use.
 
 ## Install
 
@@ -10,29 +17,41 @@ This package has three parts: **prep (preprocessing)** cleans and validates word
 pip install glove-word-embeddings
 ```
 
-This package is based on NLTK WordNet and names. NLTK data are downloaded automatically on first use of the category helpers (you will see a one-time message only when data is actually missing). Another convenience this package brings is I've pickled and saved embeddings on my AWS S3 bucket and this package will pull from it automatically, similar to NLTK data. 
+NLTK WordNet and names data are downloaded automatically on first use of the category or noun helpers (a message appears only when data is actually missing).
 
-## 1. Preprocessing (prep)
+## 1. Preprocessing (`prep`)
 
-Clean raw text and check it against Olson et al., (2021)’s validated word list.
+Clean raw text before validation or embedding.
 
 ```python
 from glove_word_embeddings import prep
 
-prep.clean_word("  Cat ")            # "cat"
+prep.strip_word("  Cat! ")           # "cat"
 prep.space_check("cat")              # True
 prep.space_check("jar of jam")       # False
 prep.remove_stopwords("jar of jam")  # ['jar', 'jam']
 
-# Ends with validation against Olson’s single-word list
-prep.word_validation("cat")          # True
-prep.word_validation("jar of jam")   # False
-prep.word_validation("  Cat ")       # True  (cleaned by default)
+prep.clean_word("  The Cat! ")       # "cat"  (strip + drop stopwords)
+prep.clean_word("jar of jam")        # "jar jam"
+prep.clean_word("the", stopwords=False)  # "the"
 ```
 
-## 2. Categorization (cat)
+## 2. Validation (`val`)
 
-Flag responses that lean too heavily on one semantic group, room objects, or pure proper nouns.
+Check words against Olson’s validated list and WordNet.
+
+```python
+from glove_word_embeddings import val
+
+val.word("telescope")    # True  (in Olson list, single token)
+val.word("jar of jam")   # False (fails space check after cleaning)
+val.noun("telescope")    # True  (has a WordNet noun synset)
+val.noun("quickly")      # False
+```
+
+## 3. Categorization (`cat`)
+
+Flag responses that lean too heavily on one semantic group, room objects, or pure proper nouns (SI Rules 1–3).
 
 ```python
 from glove_word_embeddings import cat
@@ -60,13 +79,14 @@ cat.count(words, name="brands", number_of_words=1, check_common=True)   # Rule 3
 
 Unknown `name=` values raise `ValueError`.
 
-## 3. Word Embedding (model)
+## 4. Embedding (`model`)
 
 Load a vector model and embed single words or short phrases.
 
 ```python
 import glove_word_embeddings as gwe
 
+gwe.__version__                   # installed package version
 gwe.list_models()                 # {key: filename, ...}
 
 m = gwe.load("glove-6b-300d")     # downloads on first use, caches locally
@@ -84,13 +104,13 @@ Files are cached in `~/.cache/glove-word-embeddings`.
 
 ## Citations
 
-**Wang et al., (2026)** - Please cite my work. 
+Wang et al., (2026)
 ```
 Wang, D., Huang, D., Shen, H., & Uzzi, B. (2026). A large-scale comparison of
 divergent creativity in humans and large language models. Nature Human
 Behaviour, 10(3), 531–540. https://doi.org/10.1038/s41562-025-02331-1
 ```
-**Olson et al., (2021)** - Embedding based creativity task.
+Olson et al., (2021)
 ```
 Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E.
 (2021). Naming unrelated words predicts creativity. Proceedings of the

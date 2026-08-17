@@ -3,15 +3,21 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("glove-word-embeddings")
 except PackageNotFoundError:
-    __version__ = "0.0.0+local"    
-import os,pickle,re,shutil,requests,nltk,numpy as np
+    __version__ = "0.0.0+local"
 
+import os
+import pickle
+import re
+import shutil
+
+import numpy as np
+import requests
+import nltk
 
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
-CACHE_DIR = \
-os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or \
-os.path.expanduser("~/.cache/glove-word-embeddings")
-
+CACHE_DIR = os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
+    "~/.cache/glove-word-embeddings"
+)
 
 FILES = {
     "glove-840b-300d": "glove.840B.300d.pickle",
@@ -26,8 +32,8 @@ FILES = {
     "flair-olson-twitter": "flair_olson_common_words_twitter.pickle",
     "flair-olson-turian": "flair_olson_common_words_turian.pickle",
     "flair-olson-random": "flair_olson_common_words_random.pickle",
-    "olson-validated-words": "olson_validated_100k_words.txt"}
-
+    "olson-validated-words": "olson_validated_100k_words.txt",
+}
 
 _valid_words = None
 _nltk_names = None
@@ -70,7 +76,7 @@ def load(key: str, force_download: bool = False):
             return {line.strip() for line in f if line.strip()}
 
 
-# --- 1. prep: clean and validate words -------------------------------------
+# --- 1. prep: clean / normalize only ---------------------------------------
 
 class prep:
     STOPWORDS = {
@@ -98,13 +104,19 @@ class prep:
         return [t for t in tokens if t not in prep.STOPWORDS]
 
     @staticmethod
-    def clean_word(word: str) -> str:
-        """Normalize: strip punctuation/case, then drop stopwords."""
-        word = prep.strip_word(word)
-        return " ".join(prep.remove_stopwords(word))
+    def clean_word(word: str, strip: bool = True, stopwords: bool = True) -> str:
+        """Normalize a word. Optionally strip punctuation and/or drop stopwords."""
+        w = prep.strip_word(word) if strip else str(word).strip().lower()
+        if stopwords:
+            w = " ".join(prep.remove_stopwords(w))
+        return w
 
+
+# --- 2. val: validate words ------------------------------------------------
+
+class val:
     @staticmethod
-    def word_validation(word: str, clean: bool = True, space_check: bool = True) -> bool:
+    def word(word: str, clean: bool = True, space_check: bool = True) -> bool:
         """True if the word appears in Olson’s validated single-word list."""
         global _valid_words
         if _valid_words is None:
@@ -114,194 +126,205 @@ class prep:
         if space_check and not prep.space_check(w):
             return False
         return w in _valid_words
-    
 
-# --- 2. cat: semantic / proper-noun category checks ------------------------
+    @staticmethod
+    def noun(word: str) -> bool:
+        """True if the word has at least one noun synset in WordNet."""
+        cat._ensure_nltk()
+        from nltk.corpus import wordnet as wn
+
+        w = prep.clean_word(word)
+        if not w:
+            return False
+        return any(s.pos() == "n" for s in wn.synsets(w))
+
+
+# --- 3. cat: semantic / proper-noun category checks ------------------------
 
 class cat:
     # name -> (WordNet ancestor synset or None, seed words)
     CATEGORIES = {
-    "animals": ("animal.n.01", {
-        "dog", "cat", "lion", "tiger", "bear", "elephant", "horse",
-        "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit",
-        "monkey", "zebra", "giraffe", "kangaroo", "whale", "dolphin",
-        "shark", "snake", "frog", "goose", "duck", "chicken", "hippo",
-        "rhino", "leopard", "cheetah", "panda", "koala", "otter",
-        "mouse", "rat", "bat", "squirrel", "raccoon", "skunk", "moose",
-        "buffalo", "camel", "donkey", "mule", "llama", "alpaca",
-        "crocodile", "alligator", "turtle", "tortoise", "lizard",
-        "iguana", "gecko", "salamander", "toad", "seal", "walrus",
-        "beaver", "porcupine", "hedgehog", "hamster", "guinea",
-        "pony", "foal", "calf", "lamb", "puppy", "kitten", "cub",
-    }),
-    "birds": ("bird.n.01", {
-        "robin", "sparrow", "eagle", "hawk", "owl", "parrot", "penguin",
-        "crow", "pigeon", "swan", "flamingo", "peacock", "finch",
-        "dove", "raven", "magpie", "jay", "cardinal", "bluebird",
-        "canary", "parakeet", "cockatoo", "macaw", "toucan", "heron",
-        "crane", "stork", "pelican", "seagull", "albatross", "duck",
-        "goose", "turkey", "chicken", "rooster", "hen", "chick",
-        "ostrich", "emu", "kiwi", "woodpecker", "hummingbird",
-        "nightingale", "lark", "swallow", "starling",
-    }),
-    "insects": ("insect.n.01", {
-        "ant", "bee", "wasp", "hornet", "beetle", "fly", "moth",
-        "butterfly", "dragonfly", "cricket", "grasshopper", "ladybug",
-        "mosquito", "gnat", "flea", "tick", "spider", "scorpion",
-        "centipede", "millipede", "termite", "cockroach", "roach",
-        "locust", "cicada", "mantis", "firefly", "glowworm",
-        "caterpillar", "larva", "grub", "aphid", "weevil", "earwig",
-    }),
-    "foods": ("food.n.01", {
-        "bread", "cheese", "rice", "pasta", "pizza", "burger", "cake",
-        "soup", "egg", "butter", "sugar", "salt", "chocolate", "cookie",
-        "sandwich", "cereal", "biscuit", "jam", "honey", "meat", "fish",
-        "chicken", "beef", "pork", "bacon", "sausage", "steak", "ham",
-        "noodles", "salad", "sauce", "yogurt", "yoghurt", "milk",
-        "cream", "ice-cream", "pie", "pudding", "donut", "doughnut",
-        "waffle", "pancake", "toast", "bagel", "muffin", "cracker",
-        "chip", "chips", "fries", "noodle", "dumpling", "sushi",
-        "taco", "burrito", "nacho", "ketchup", "mustard", "mayo",
-        "mayonnaise", "vinegar", "oil", "flour", "spice", "pepper",
-    }),
-    "fruits": ("fruit.n.01", {
-        "apple", "banana", "orange", "grape", "pear", "peach", "plum",
-        "cherry", "mango", "melon", "lemon", "lime", "kiwi",
-        "strawberry", "pineapple", "raspberry", "blueberry",
-        "watermelon", "cantaloupe", "honeydew", "papaya", "guava",
-        "fig", "date", "coconut", "avocado", "pomegranate", "apricot",
-        "nectarine", "tangerine", "clementine", "grapefruit",
-        "blackberry", "cranberry", "gooseberry", "currant", "lychee",
-        "passionfruit", "dragonfruit", "starfruit", "persimmon",
-    }),
-    "vegetables": ("vegetable.n.01", {
-        "carrot", "potato", "onion", "pea", "peas", "bean", "beans",
-        "broccoli", "spinach", "lettuce", "cabbage", "cucumber",
-        "pepper", "tomato", "corn", "celery", "garlic", "ginger",
-        "mushroom", "zucchini", "courgette", "eggplant", "aubergine",
-        "pumpkin", "squash", "radish", "beet", "beetroot", "turnip",
-        "parsnip", "leek", "shallot", "scallion", "asparagus",
-        "artichoke", "cauliflower", "kale", "chard", "okra", "yam",
-        "sweetpotato", "lentil", "chickpea", "tofu",
-    }),
-    "plants": ("plant.n.02", {
-        "tree", "fern", "moss", "rose", "tulip", "daisy", "oak", "pine",
-        "cactus", "ivy", "bamboo", "bush", "shrub", "vine", "grass",
-        "flower", "leaf", "leaves", "branch", "root", "seed", "weed",
-        "willow", "maple", "birch", "cedar", "fir", "spruce", "palm",
-        "lily", "orchid", "sunflower", "lavender", "mint", "basil",
-        "thyme", "rosemary", "sage", "parsley", "cilantro", "herb",
-        "algae", "seaweed", "mushroom", "fungus", "clover", "dandelion",
-    }),
-    "colors": ("color.n.01", {
-        "red", "blue", "green", "yellow", "orange", "purple", "pink",
-        "brown", "black", "white", "grey", "gray", "violet", "indigo",
-        "cyan", "magenta", "turquoise", "maroon", "beige", "gold",
-        "silver", "navy", "teal", "olive", "lime", "coral", "salmon",
-        "crimson", "scarlet", "amber", "ivory", "cream", "tan", "khaki",
-        "lavender", "lilac", "peach", "mint", "aqua", "azure", "charcoal",
-    }),
-    "body_parts": ("body_part.n.01", {
-        "arm", "leg", "hand", "foot", "head", "eye", "ear", "nose",
-        "mouth", "finger", "toe", "knee", "elbow", "shoulder", "heart",
-        "liver", "lung", "brain", "teeth", "tooth", "hair", "skin",
-        "neck", "back", "chest", "stomach", "belly", "hip", "thigh",
-        "ankle", "wrist", "palm", "thumb", "nail", "tongue", "lip",
-        "cheek", "chin", "forehead", "eyebrow", "eyelash", "throat",
-        "bone", "muscle", "blood", "vein", "nerve", "spine", "rib",
-        "kidney", "intestine", "bladder", "skull", "jaw",
-    }),
-    "metals": ("metal.n.01", {
-        "gold", "silver", "iron", "copper", "bronze", "steel", "tin",
-        "zinc", "lead", "aluminium", "aluminum", "nickel", "platinum",
-        "titanium", "brass", "chrome", "chromium", "cobalt", "mercury",
-        "tungsten", "uranium", "magnesium", "lithium", "sodium",
-        "potassium", "calcium", "alloy", "metal", "ore", "rust",
-    }),
-    "planets": (None, {
-        "mercury", "venus", "earth", "mars", "jupiter", "saturn",
-        "uranus", "neptune", "pluto", "sun", "moon", "star", "comet",
-        "asteroid", "supernova", "galaxy", "nebula", "meteor",
-        "planet", "satellite", "orbit", "cosmos", "universe", "space",
-        "constellation", "quasar", "pulsar", "blackhole", "meteorite",
-        "eclipse", "solstice", "equinox", "aurora",
-    }),
-    "sports": (None, {
-        "football", "soccer", "basketball", "tennis", "cricket", "golf",
-        "rugby", "hockey", "baseball", "swimming", "boxing", "cycling",
-        "skiing", "volleyball", "badminton", "squash", "wrestling",
-        "karate", "judo", "taekwondo", "fencing", "archery", "rowing",
-        "sailing", "surfing", "skating", "snowboarding", "climbing",
-        "running", "jogging", "marathon", "sprint", "gymnastics",
-        "diving", "polo", "lacrosse", "softball", "handball", "bowling",
-        "billiards", "pool", "darts", "chess", "esports",
-    }),
-    "tools": ("tool.n.01", {
-        "hammer", "screwdriver", "wrench", "drill", "saw", "pliers",
-        "chisel", "axe", "spanner", "clamp", "nail", "screw", "bolt",
-        "nut", "washer", "tape", "ruler", "knife", "scissors", "glue",
-        "file", "rasp", "mallet", "sledgehammer", "crowbar", "pickaxe",
-        "shovel", "rake", "hoe", "trowel", "brush", "sandpaper",
-    }),
-    "countries": ("country.n.02", {
-        "france", "germany", "spain", "italy", "china", "japan", "india",
-        "brazil", "canada", "egypt", "kenya", "peru", "chile", "mexico",
-        "usa", "america", "england", "britain", "uk", "russia",
-        "australia", "argentina", "colombia", "venezuela", "cuba",
-        "nigeria", "ghana", "ethiopia", "morocco", "algeria",
-        "turkey", "iran", "iraq", "israel", "saudi", "korea",
-        "vietnam", "thailand", "indonesia", "malaysia", "philippines",
-        "portugal", "greece", "poland", "sweden", "norway", "denmark",
-        "finland", "ireland", "scotland", "wales", "switzerland",
-        "austria", "belgium", "netherlands", "holland",
-    }),
-    "environment": (None, {
-        "desk", "table", "chair", "bed", "sofa", "couch", "shelf",
-        "bookshelf", "stool", "bench", "cabinet", "drawer", "wardrobe",
-        "dresser", "nightstand", "wall", "walls", "floor", "ceiling",
-        "door", "window", "roof", "stairs", "carpet", "rug", "curtain",
-        "curtains", "blind", "blinds", "tile", "tiles", "corner", "room",
-        "hallway", "fireplace", "radiator", "switch", "socket",
-        "shoe", "shoes", "shirt", "tshirt", "sock", "socks", "hat",
-        "cap", "jacket", "coat", "trousers", "pants", "jeans", "belt",
-        "glasses", "watch", "sweater", "scarf", "glove", "gloves",
-        "boot", "boots", "pen", "pencil", "paper", "cup", "mug", "glass",
-        "keyboard", "mouse", "phone", "laptop", "computer", "monitor",
-        "screen", "lamp", "book", "books", "bottle", "notebook",
-        "charger", "cable", "wallet", "key", "keys", "clock", "remote",
-        "tissue", "plate", "bowl", "fork", "spoon", "knife", "napkin",
-        "sky", "tree", "trees", "grass", "cloud", "clouds", "sun",
-        "car", "cars", "street", "road", "garden", "fence", "bush",
-        "bird", "pillow", "blanket", "mirror", "picture", "frame",
-        "vase", "plant", "bin", "trash", "bag", "box", "umbrella",
-    }),
-    "places": (None, {
-        "england", "scotland", "wales", "ireland", "france", "germany",
-        "spain", "italy", "china", "japan", "india", "brazil", "canada",
-        "mexico", "egypt", "kenya", "russia", "america", "usa", "uk",
-        "europe", "asia", "africa", "australia", "london", "paris",
-        "berlin", "rome", "madrid", "tokyo", "beijing", "moscow",
-        "newyork", "chicago", "boston", "sydney", "dublin", "edinburgh",
-        "manchester", "losangeles", "sanfrancisco", "seattle", "miami",
-        "toronto", "vancouver", "montreal", "mumbai", "delhi", "shanghai",
-        "hongkong", "singapore", "dubai", "cairo", "lagos", "nairobi",
-        "athens", "vienna", "prague", "amsterdam", "brussels", "lisbon",
-        "stockholm", "oslo", "copenhagen", "helsinki", "warsaw",
-    }),
-    "brands": (None, {
-        "google", "apple", "microsoft", "amazon", "facebook", "tesla",
-        "nike", "adidas", "coca", "cola", "pepsi", "mcdonalds",
-        "starbucks", "samsung", "sony", "toyota", "ford", "bmw",
-        "gucci", "prada", "disney", "netflix", "spotify", "ikea", "lego",
-        "intel", "nvidia", "ibm", "oracle", "cisco", "uber", "lyft",
-        "airbnb", "twitter", "instagram", "whatsapp", "youtube",
-        "walmart", "target", "costco", "cvs", "walgreens", "shell",
-        "exxon", "bp", "chevron", "visa", "mastercard", "paypal",
-        "honda", "nissan", "hyundai", "volkswagen", "audi", "mercedes",
-        "chanel", "lv", "louisvuitton", "hermes", "rolex", "cartier",
-    }),
-    "names": (None, None)}  # filled lazily from nltk.corpus.names
-
+        "animals": ("animal.n.01", {
+            "dog", "cat", "lion", "tiger", "bear", "elephant", "horse",
+            "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit",
+            "monkey", "zebra", "giraffe", "kangaroo", "whale", "dolphin",
+            "shark", "snake", "frog", "goose", "duck", "chicken", "hippo",
+            "rhino", "leopard", "cheetah", "panda", "koala", "otter",
+            "mouse", "rat", "bat", "squirrel", "raccoon", "skunk", "moose",
+            "buffalo", "camel", "donkey", "mule", "llama", "alpaca",
+            "crocodile", "alligator", "turtle", "tortoise", "lizard",
+            "iguana", "gecko", "salamander", "toad", "seal", "walrus",
+            "beaver", "porcupine", "hedgehog", "hamster", "guinea",
+            "pony", "foal", "calf", "lamb", "puppy", "kitten", "cub",
+        }),
+        "birds": ("bird.n.01", {
+            "robin", "sparrow", "eagle", "hawk", "owl", "parrot", "penguin",
+            "crow", "pigeon", "swan", "flamingo", "peacock", "finch",
+            "dove", "raven", "magpie", "jay", "cardinal", "bluebird",
+            "canary", "parakeet", "cockatoo", "macaw", "toucan", "heron",
+            "crane", "stork", "pelican", "seagull", "albatross", "duck",
+            "goose", "turkey", "chicken", "rooster", "hen", "chick",
+            "ostrich", "emu", "kiwi", "woodpecker", "hummingbird",
+            "nightingale", "lark", "swallow", "starling",
+        }),
+        "insects": ("insect.n.01", {
+            "ant", "bee", "wasp", "hornet", "beetle", "fly", "moth",
+            "butterfly", "dragonfly", "cricket", "grasshopper", "ladybug",
+            "mosquito", "gnat", "flea", "tick", "spider", "scorpion",
+            "centipede", "millipede", "termite", "cockroach", "roach",
+            "locust", "cicada", "mantis", "firefly", "glowworm",
+            "caterpillar", "larva", "grub", "aphid", "weevil", "earwig",
+        }),
+        "foods": ("food.n.01", {
+            "bread", "cheese", "rice", "pasta", "pizza", "burger", "cake",
+            "soup", "egg", "butter", "sugar", "salt", "chocolate", "cookie",
+            "sandwich", "cereal", "biscuit", "jam", "honey", "meat", "fish",
+            "chicken", "beef", "pork", "bacon", "sausage", "steak", "ham",
+            "noodles", "salad", "sauce", "yogurt", "yoghurt", "milk",
+            "cream", "ice-cream", "pie", "pudding", "donut", "doughnut",
+            "waffle", "pancake", "toast", "bagel", "muffin", "cracker",
+            "chip", "chips", "fries", "noodle", "dumpling", "sushi",
+            "taco", "burrito", "nacho", "ketchup", "mustard", "mayo",
+            "mayonnaise", "vinegar", "oil", "flour", "spice", "pepper",
+        }),
+        "fruits": ("fruit.n.01", {
+            "apple", "banana", "orange", "grape", "pear", "peach", "plum",
+            "cherry", "mango", "melon", "lemon", "lime", "kiwi",
+            "strawberry", "pineapple", "raspberry", "blueberry",
+            "watermelon", "cantaloupe", "honeydew", "papaya", "guava",
+            "fig", "date", "coconut", "avocado", "pomegranate", "apricot",
+            "nectarine", "tangerine", "clementine", "grapefruit",
+            "blackberry", "cranberry", "gooseberry", "currant", "lychee",
+            "passionfruit", "dragonfruit", "starfruit", "persimmon",
+        }),
+        "vegetables": ("vegetable.n.01", {
+            "carrot", "potato", "onion", "pea", "peas", "bean", "beans",
+            "broccoli", "spinach", "lettuce", "cabbage", "cucumber",
+            "pepper", "tomato", "corn", "celery", "garlic", "ginger",
+            "mushroom", "zucchini", "courgette", "eggplant", "aubergine",
+            "pumpkin", "squash", "radish", "beet", "beetroot", "turnip",
+            "parsnip", "leek", "shallot", "scallion", "asparagus",
+            "artichoke", "cauliflower", "kale", "chard", "okra", "yam",
+            "sweetpotato", "lentil", "chickpea", "tofu",
+        }),
+        "plants": ("plant.n.02", {
+            "tree", "fern", "moss", "rose", "tulip", "daisy", "oak", "pine",
+            "cactus", "ivy", "bamboo", "bush", "shrub", "vine", "grass",
+            "flower", "leaf", "leaves", "branch", "root", "seed", "weed",
+            "willow", "maple", "birch", "cedar", "fir", "spruce", "palm",
+            "lily", "orchid", "sunflower", "lavender", "mint", "basil",
+            "thyme", "rosemary", "sage", "parsley", "cilantro", "herb",
+            "algae", "seaweed", "mushroom", "fungus", "clover", "dandelion",
+        }),
+        "colors": ("color.n.01", {
+            "red", "blue", "green", "yellow", "orange", "purple", "pink",
+            "brown", "black", "white", "grey", "gray", "violet", "indigo",
+            "cyan", "magenta", "turquoise", "maroon", "beige", "gold",
+            "silver", "navy", "teal", "olive", "lime", "coral", "salmon",
+            "crimson", "scarlet", "amber", "ivory", "cream", "tan", "khaki",
+            "lavender", "lilac", "peach", "mint", "aqua", "azure", "charcoal",
+        }),
+        "body_parts": ("body_part.n.01", {
+            "arm", "leg", "hand", "foot", "head", "eye", "ear", "nose",
+            "mouth", "finger", "toe", "knee", "elbow", "shoulder", "heart",
+            "liver", "lung", "brain", "teeth", "tooth", "hair", "skin",
+            "neck", "back", "chest", "stomach", "belly", "hip", "thigh",
+            "ankle", "wrist", "palm", "thumb", "nail", "tongue", "lip",
+            "cheek", "chin", "forehead", "eyebrow", "eyelash", "throat",
+            "bone", "muscle", "blood", "vein", "nerve", "spine", "rib",
+            "kidney", "intestine", "bladder", "skull", "jaw",
+        }),
+        "metals": ("metal.n.01", {
+            "gold", "silver", "iron", "copper", "bronze", "steel", "tin",
+            "zinc", "lead", "aluminium", "aluminum", "nickel", "platinum",
+            "titanium", "brass", "chrome", "chromium", "cobalt", "mercury",
+            "tungsten", "uranium", "magnesium", "lithium", "sodium",
+            "potassium", "calcium", "alloy", "metal", "ore", "rust",
+        }),
+        "planets": (None, {
+            "mercury", "venus", "earth", "mars", "jupiter", "saturn",
+            "uranus", "neptune", "pluto", "sun", "moon", "star", "comet",
+            "asteroid", "supernova", "galaxy", "nebula", "meteor",
+            "planet", "satellite", "orbit", "cosmos", "universe", "space",
+            "constellation", "quasar", "pulsar", "blackhole", "meteorite",
+            "eclipse", "solstice", "equinox", "aurora",
+        }),
+        "sports": (None, {
+            "football", "soccer", "basketball", "tennis", "cricket", "golf",
+            "rugby", "hockey", "baseball", "swimming", "boxing", "cycling",
+            "skiing", "volleyball", "badminton", "squash", "wrestling",
+            "karate", "judo", "taekwondo", "fencing", "archery", "rowing",
+            "sailing", "surfing", "skating", "snowboarding", "climbing",
+            "running", "jogging", "marathon", "sprint", "gymnastics",
+            "diving", "polo", "lacrosse", "softball", "handball", "bowling",
+            "billiards", "pool", "darts", "chess", "esports",
+        }),
+        "tools": ("tool.n.01", {
+            "hammer", "screwdriver", "wrench", "drill", "saw", "pliers",
+            "chisel", "axe", "spanner", "clamp", "nail", "screw", "bolt",
+            "nut", "washer", "tape", "ruler", "knife", "scissors", "glue",
+            "file", "rasp", "mallet", "sledgehammer", "crowbar", "pickaxe",
+            "shovel", "rake", "hoe", "trowel", "brush", "sandpaper",
+        }),
+        "countries": ("country.n.02", {
+            "france", "germany", "spain", "italy", "china", "japan", "india",
+            "brazil", "canada", "egypt", "kenya", "peru", "chile", "mexico",
+            "usa", "america", "england", "britain", "uk", "russia",
+            "australia", "argentina", "colombia", "venezuela", "cuba",
+            "nigeria", "ghana", "ethiopia", "morocco", "algeria",
+            "turkey", "iran", "iraq", "israel", "saudi", "korea",
+            "vietnam", "thailand", "indonesia", "malaysia", "philippines",
+            "portugal", "greece", "poland", "sweden", "norway", "denmark",
+            "finland", "ireland", "scotland", "wales", "switzerland",
+            "austria", "belgium", "netherlands", "holland",
+        }),
+        "environment": (None, {
+            "desk", "table", "chair", "bed", "sofa", "couch", "shelf",
+            "bookshelf", "stool", "bench", "cabinet", "drawer", "wardrobe",
+            "dresser", "nightstand", "wall", "walls", "floor", "ceiling",
+            "door", "window", "roof", "stairs", "carpet", "rug", "curtain",
+            "curtains", "blind", "blinds", "tile", "tiles", "corner", "room",
+            "hallway", "fireplace", "radiator", "switch", "socket",
+            "shoe", "shoes", "shirt", "tshirt", "sock", "socks", "hat",
+            "cap", "jacket", "coat", "trousers", "pants", "jeans", "belt",
+            "glasses", "watch", "sweater", "scarf", "glove", "gloves",
+            "boot", "boots", "pen", "pencil", "paper", "cup", "mug", "glass",
+            "keyboard", "mouse", "phone", "laptop", "computer", "monitor",
+            "screen", "lamp", "book", "books", "bottle", "notebook",
+            "charger", "cable", "wallet", "key", "keys", "clock", "remote",
+            "tissue", "plate", "bowl", "fork", "spoon", "knife", "napkin",
+            "sky", "tree", "trees", "grass", "cloud", "clouds", "sun",
+            "car", "cars", "street", "road", "garden", "fence", "bush",
+            "bird", "pillow", "blanket", "mirror", "picture", "frame",
+            "vase", "plant", "bin", "trash", "bag", "box", "umbrella",
+        }),
+        "places": (None, {
+            "england", "scotland", "wales", "ireland", "france", "germany",
+            "spain", "italy", "china", "japan", "india", "brazil", "canada",
+            "mexico", "egypt", "kenya", "russia", "america", "usa", "uk",
+            "europe", "asia", "africa", "australia", "london", "paris",
+            "berlin", "rome", "madrid", "tokyo", "beijing", "moscow",
+            "newyork", "chicago", "boston", "sydney", "dublin", "edinburgh",
+            "manchester", "losangeles", "sanfrancisco", "seattle", "miami",
+            "toronto", "vancouver", "montreal", "mumbai", "delhi", "shanghai",
+            "hongkong", "singapore", "dubai", "cairo", "lagos", "nairobi",
+            "athens", "vienna", "prague", "amsterdam", "brussels", "lisbon",
+            "stockholm", "oslo", "copenhagen", "helsinki", "warsaw",
+        }),
+        "brands": (None, {
+            "google", "apple", "microsoft", "amazon", "facebook", "tesla",
+            "nike", "adidas", "coca", "cola", "pepsi", "mcdonalds",
+            "starbucks", "samsung", "sony", "toyota", "ford", "bmw",
+            "gucci", "prada", "disney", "netflix", "spotify", "ikea", "lego",
+            "intel", "nvidia", "ibm", "oracle", "cisco", "uber", "lyft",
+            "airbnb", "twitter", "instagram", "whatsapp", "youtube",
+            "walmart", "target", "costco", "cvs", "walgreens", "shell",
+            "exxon", "bp", "chevron", "visa", "mastercard", "paypal",
+            "honda", "nissan", "hyundai", "volkswagen", "audi", "mercedes",
+            "chanel", "lv", "louisvuitton", "hermes", "rolex", "cartier",
+        }),
+        "names": (None, None),  # filled lazily from nltk.corpus.names
+    }
 
     @staticmethod
     def _ensure_nltk():
@@ -444,7 +467,7 @@ class cat:
         return max(counts.values()) >= number_of_words
 
 
-# --- 3. model: word embeddings ---------------------------------------------
+# --- 4. model: word embeddings ---------------------------------------------
 
 class model:
     def __init__(self, vectors: dict):
