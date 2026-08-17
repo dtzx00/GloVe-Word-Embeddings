@@ -92,8 +92,9 @@ class prep:
 
     @staticmethod
     def clean_word(word: str) -> str:
-        """Normalize a word: lowercase, strip punctuation and outer spaces."""
-        return prep.strip_word(word)
+        """Normalize: strip punctuation/case, then drop stopwords."""
+        word = prep.strip_word(word)
+        return " ".join(prep.remove_stopwords(word))
 
     @staticmethod
     def word_validation(word: str, clean: bool = True, space_check: bool = True) -> bool:
