@@ -74,7 +74,8 @@ class pre:
     @staticmethod
     def clean_word(word: str, strip: bool = True, stopwords: bool = True) -> str:
         """Normalize a word. Optionally strip punctuation and/or drop stopwords."""
-        w = pre.strip_word(word) if strip else str(word).strip().lower()
+        if strip:
+            w = pre.strip_word(word)
         if stopwords:
             w = " ".join(pre.remove_stopwords(w))
         return w
@@ -85,7 +86,7 @@ class pre:
 class val:
     @staticmethod
     def word(word: str, clean: bool = True, space_check: bool = True) -> bool:
-        """True if the word appears in Olson’s validated single-word list."""
+        """Return True if the word appears in Olson’s validated word list."""
         global _valid_words
         if _valid_words is None:
             _valid_words = mod.load("olson-validated-words")
@@ -97,7 +98,7 @@ class val:
 
     @staticmethod
     def noun(word: str) -> bool:
-        """True if the word has at least one noun synset in WordNet."""
+        """Return True if the word has at least one noun synset in WordNet."""
         cat._ensure_nltk()
         from nltk.corpus import wordnet as wn
 
@@ -105,6 +106,17 @@ class val:
         if not w:
             return False
         return any(s.pos() == "n" for s in wn.synsets(w))
+    
+    @staticmethod
+    def vocab(word: str, vocab: set) -> bool:
+        """Return True if a compound word, e.g., ice-cream, is in the embedding vocab."""
+        w = pre.clean_word(word)
+        if not w:
+            return False
+        for cand in (w, w.replace(" ", "_"), w.replace(" ", "-"), w.replace("-", "_")):
+            if cand in vocab:
+                return True
+        return False    
 
 
 # --- 3. cat: semantic / proper-noun category checks ------------------------
