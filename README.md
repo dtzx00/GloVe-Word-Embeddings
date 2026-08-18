@@ -41,12 +41,18 @@ pre.clean_word("the", stopwords=False)  # "the"
 Check words against Olson’s validated list and WordNet.
 
 ```python
-from glove_word_embeddings import val
+from glove_word_embeddings import mod, val
 
 val.word("telescope")    # True  (in Olson list, single token)
 val.word("jar of jam")   # False (fails space check after cleaning)
 val.noun("telescope")    # True  (has a WordNet noun synset)
 val.noun("quickly")      # False
+
+m = mod.load("glove-olson-validated")
+v = m.vocab_set()
+val.vocab("telescope", v)   # True
+val.vocab("ice cream", v)   # True if "ice_cream" / "ice-cream" / "ice cream" is in v
+val.vocab("", v)            # False
 ```
 
 ## 3. Categorization (`cat`)
