@@ -1,23 +1,15 @@
 from __future__ import annotations
+import nltk,requests,os,pickle,re,shutil,numpy as np
 from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("glove-word-embeddings")
 except PackageNotFoundError:
     __version__ = "0.0.0+local"
 
-import os
-import pickle
-import re
-import shutil
-
-import numpy as np
-import requests
-import nltk
-
 BASE_URL = "https://embedding-files-open-access.s3.us-east-1.amazonaws.com"
-CACHE_DIR = os.environ.get("GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
-    "~/.cache/glove-word-embeddings"
-)
+CACHE_DIR = os.environ.get(
+    "GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
+    "~/.cache/glove-word-embeddings")
 
 FILES = {
     "glove-840b-300d": "glove.840B.300d.pickle",
@@ -52,33 +44,9 @@ def clean_up():
     _nltk_ready = False
 
 
-def load(key: str, force_download: bool = False):
-    """Download `key` if not cached, then return a model (or word set for the wordlist)."""
-    if key not in FILES:
-        raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES)}")
+# --- 1. pre: clean / normalize only ----------------------------------------
 
-    filename = FILES[key]
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, filename)
-
-    if force_download or not os.path.exists(path):
-        resp = requests.get(f"{BASE_URL}/{filename}", stream=True)
-        resp.raise_for_status()
-        with open(path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=1024 * 1024):
-                f.write(chunk)
-
-    if filename.endswith(".pickle"):
-        with open(path, "rb") as f:
-            return model(pickle.load(f))
-    else:
-        with open(path, "r", encoding="utf-8") as f:
-            return {line.strip() for line in f if line.strip()}
-
-
-# --- 1. prep: clean / normalize only ---------------------------------------
-
-class prep:
+class pre:
     STOPWORDS = {
         "a", "an", "the", "and", "or", "but", "nor", "of", "to", "in", "on",
         "for", "with", "at", "by", "from", "as", "into", "onto", "upon", "over",
@@ -101,14 +69,14 @@ class prep:
     def remove_stopwords(phrase: str) -> list[str]:
         """Return non-stopword tokens of a phrase (lower-cased)."""
         tokens = re.findall(r"[a-z0-9]+(?:'[a-z]+)?", phrase.lower())
-        return [t for t in tokens if t not in prep.STOPWORDS]
+        return [t for t in tokens if t not in pre.STOPWORDS]
 
     @staticmethod
     def clean_word(word: str, strip: bool = True, stopwords: bool = True) -> str:
         """Normalize a word. Optionally strip punctuation and/or drop stopwords."""
-        w = prep.strip_word(word) if strip else str(word).strip().lower()
+        w = pre.strip_word(word) if strip else str(word).strip().lower()
         if stopwords:
-            w = " ".join(prep.remove_stopwords(w))
+            w = " ".join(pre.remove_stopwords(w))
         return w
 
 
@@ -120,10 +88,10 @@ class val:
         """True if the word appears in Olson’s validated single-word list."""
         global _valid_words
         if _valid_words is None:
-            _valid_words = load("olson-validated-words")
+            _valid_words = mod.load("olson-validated-words")
 
-        w = prep.clean_word(word) if clean else word
-        if space_check and not prep.space_check(w):
+        w = pre.clean_word(word) if clean else word
+        if space_check and not pre.space_check(w):
             return False
         return w in _valid_words
 
@@ -133,7 +101,7 @@ class val:
         cat._ensure_nltk()
         from nltk.corpus import wordnet as wn
 
-        w = prep.clean_word(word)
+        w = pre.clean_word(word)
         if not w:
             return False
         return any(s.pos() == "n" for s in wn.synsets(w))
@@ -396,7 +364,7 @@ class cat:
         cat._ensure_nltk()
         from nltk.corpus import wordnet as wn
 
-        word = prep.clean_word(word)
+        word = pre.clean_word(word)
         common = [s for s in wn.synsets(word, pos=wn.NOUN) if not s.instance_hypernyms()]
         return len(common) >= n_senses
 
@@ -411,7 +379,7 @@ class cat:
         cat._ensure_nltk()
         from nltk.corpus import wordnet as wn
 
-        word = prep.clean_word(word)
+        word = pre.clean_word(word)
         out = set()
 
         for name, (syn, seeds) in cat.CATEGORIES.items():
@@ -467,11 +435,35 @@ class cat:
         return max(counts.values()) >= number_of_words
 
 
-# --- 4. model: word embeddings ---------------------------------------------
+# --- 4. mod: word embeddings -----------------------------------------------
 
-class model:
+class mod:
     def __init__(self, vectors: dict):
         self.vectors = vectors
+
+    @staticmethod
+    def load(key: str, force_download: bool = False):
+        """Download `key` if not cached, then return a mod (or word set for the wordlist)."""
+        if key not in FILES:
+            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES)}")
+
+        filename = FILES[key]
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        path = os.path.join(CACHE_DIR, filename)
+
+        if force_download or not os.path.exists(path):
+            resp = requests.get(f"{BASE_URL}/{filename}", stream=True)
+            resp.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+
+        if filename.endswith(".pickle"):
+            with open(path, "rb") as f:
+                return mod(pickle.load(f))
+        else:
+            with open(path, "r", encoding="utf-8") as f:
+                return {line.strip() for line in f if line.strip()}
 
     def embed_exact(self, word: str):
         """Embed using exact match only."""
@@ -492,7 +484,7 @@ class model:
             if variant in self.vectors:
                 return self.vectors[variant]
 
-        parts = [self.vectors[p] for p in prep.remove_stopwords(phrase) if p in self.vectors]
+        parts = [self.vectors[p] for p in pre.remove_stopwords(phrase) if p in self.vectors]
         if parts and len({p.shape for p in parts}) == 1:
             return np.mean(np.stack(parts).astype(np.float32), axis=0)
         return None
