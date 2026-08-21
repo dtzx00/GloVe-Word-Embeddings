@@ -50,35 +50,69 @@ class pre:
     STOPWORDS = {
         "a", "an", "the", "and", "or", "but", "nor", "of", "to", "in", "on",
         "for", "with", "at", "by", "from", "as", "into", "onto", "upon", "over",
-        "under", "about", "between", "through", "is", "are", "was", "were",
-        "be", "been", "being", "this", "that", "these", "those", "it", "its",
-    }
+        "under", "about", "between", "through", "is", "are", "was", "were", "ah",
+        "be", "been", "being", "this", "that", "these", "those", "it", "its"}
 
     @staticmethod
-    def strip_word(word: str) -> str:
-        """Lowercase and strip punctuation; keep letters, digits, spaces."""
-        return re.sub(r"[^\w\s]", "", word.lower()).strip()
+    def check_lowercase(word: str) -> bool:
+        """True if the word has no uppercase characters."""
+        return word == word.lower()
 
     @staticmethod
-    def space_check(word: str) -> bool:
-        """True if the word is a single token (no spaces, hyphens, underscores)."""
-        w = word.strip()
-        return bool(w) and not any(c in w for c in (" ", "-", "_"))
+    def return_lowercase(word: str) -> str:
+        """Return word in lowercase."""
+        return word.lower()
 
     @staticmethod
-    def remove_stopwords(phrase: str) -> list[str]:
-        """Return non-stopword tokens of a phrase (lower-cased)."""
-        tokens = re.findall(r"[a-z0-9]+(?:'[a-z]+)?", phrase.lower())
-        return [t for t in tokens if t not in pre.STOPWORDS]
+    def check_stopword(word: str) -> bool:
+        """True if the word / phrase contains a stopword."""
+        return not (word == pre.strip_stopword(word))
 
     @staticmethod
-    def clean_word(word: str, strip: bool = True, stopwords: bool = True) -> str:
-        """Normalize a word. Optionally strip punctuation and/or drop stopwords."""
-        if strip:
-            w = pre.strip_word(word)
-        if stopwords:
-            w = " ".join(pre.remove_stopwords(w))
-        return w
+    def strip_stopword(word: str) -> list[str]:
+        """Return non-stopword tokens of a phrase."""
+        word = word.split(' ')
+        return ' '.join([w for w in word if w.lower() not in pre.STOPWORDS])
+
+    @staticmethod
+    def check_marks(word: str) -> bool:
+        """True if the word has punctuations, ignore spacing."""
+        return not (word == pre.strip_marks(word))
+
+    @staticmethod
+    def strip_marks(word: str) -> str:
+        """Replace punctuation with space; keep letters, digits, spaces."""
+        return re.sub(r"[^\w\s]", " ", word)
+
+    @staticmethod
+    def check_space(word: str) -> bool:
+        """True if the word has spacing, ignore punctuations."""
+        return not (word == pre.strip_space(word))
+
+    @staticmethod
+    def strip_space(word: str) -> str:
+        """Return word without spacing. Punctuation unchanged."""
+        return re.sub(r"[\s\-_]+", "", word)
+
+    @staticmethod
+    def clean_word(word: str,
+                   return_lowercase_bool: bool = True,
+                   strip_stopword_bool: bool = True,
+                   strip_marks_bool: bool = True,
+                   strip_space_bool: bool = True) -> str:
+        """Normalize a word or phrase. Optionally drop stopwords, punctuation, spacing."""
+        if word:
+            if return_lowercase_bool:
+                word = pre.return_lowercase(word)
+            if strip_stopword_bool:
+                word = pre.strip_stopword(word)
+            if strip_marks_bool:
+                word = pre.strip_marks(word)
+            if strip_space_bool:
+                word = pre.strip_space(word)
+            return word
+        else:
+            return None
 
 
 # --- 2. val: validate words ------------------------------------------------
