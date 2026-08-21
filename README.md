@@ -19,6 +19,8 @@ pip install glove-word-embeddings
 
 NLTK WordNet and names data are downloaded automatically on first use of the category or noun helpers (a message appears only when data is actually missing).
 
+
+
 ## 1. Preprocessing (`pre`)
 
 Clean raw text before validation or embedding.
@@ -26,14 +28,19 @@ Clean raw text before validation or embedding.
 ```python
 from glove_word_embeddings import pre
 
-pre.strip_word("  Cat! ")           # "cat"
-pre.space_check("cat")              # True
-pre.space_check("jar of jam")       # False
-pre.remove_stopwords("jar of jam")  # ['jar', 'jam']
+pre.return_lowercase("  Cat! ")          # "  cat! "
+pre.strip_marks("  Cat! ")               # "  Cat  "
+pre.strip_stopword("The Cat")            # "Cat"
+pre.strip_space("jar of jam")            # "jarofjam"
+pre.remove_stopwords("jar of jam")       # ['jar', 'jam']
+pre.space_check("cat")                   # True   (single token)
+pre.space_check("jar of jam")            # False
 
-pre.clean_word("  The Cat! ")       # "cat"  (strip + drop stopwords)
-pre.clean_word("jar of jam")        # "jar jam"
-pre.clean_word("the", stopwords=False)  # "the"
+# Full clean (defaults: lower + drop stopwords + strip marks + strip space)
+pre.clean_word("  The Cat! ")            # "cat"
+pre.clean_word("jar of jam")             # "jarjam"
+pre.clean_word("jar of jam", strip_space_bool=False)  # "jar jam"
+pre.clean_word("the", strip_stopword_bool=False)      # "the"
 ```
 
 ## 2. Validation (`val`)

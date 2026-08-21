@@ -113,7 +113,7 @@ class pre:
                    strip_marks_bool: bool = True,
                    strip_space_bool: bool = True) -> str:
         """Normalize a word or phrase. Optionally drop stopwords, punctuation, spacing."""
-        if word:
+        if (word) and (word is not np.nan):
             if return_lowercase_bool:
                 word = pre.return_lowercase(word)
             if strip_stopword_bool:
