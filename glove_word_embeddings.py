@@ -69,10 +69,17 @@ class pre:
         return not (word == pre.strip_stopword(word))
 
     @staticmethod
-    def strip_stopword(word: str) -> list[str]:
-        """Return non-stopword tokens of a phrase."""
-        word = word.split(' ')
-        return ' '.join([w for w in word if w.lower() not in pre.STOPWORDS])
+    def strip_stopword(word: str) -> str:
+        """Return the phrase with stopwords removed (as joined string)."""
+        tokens = (word or "").split()
+        return " ".join(w for w in tokens if w.lower() not in pre.STOPWORDS)
+
+    @staticmethod
+    def remove_stopwords(phrase: str) -> list[str]:
+        """Return list of non-stopword tokens. Matches README and embed_phrase usage."""
+        if not phrase:
+            return []
+        return [w for w in phrase.split() if w.lower() not in pre.STOPWORDS]
 
     @staticmethod
     def check_marks(word: str) -> bool:
@@ -86,13 +93,18 @@ class pre:
 
     @staticmethod
     def check_space(word: str) -> bool:
-        """True if the word has spacing, ignore punctuations."""
-        return not (word == pre.strip_space(word))
+        """True if the word has spacing (whitespace / - / _)."""
+        return bool(re.search(r"[\s\-_]+", word or ""))
+
+    @staticmethod
+    def space_check(word: str) -> bool:
+        """True if the word is a single token with no spacing. Matches README: cat→True, 'jar of jam'→False."""
+        return not pre.check_space(word)
 
     @staticmethod
     def strip_space(word: str) -> str:
         """Return word without spacing. Punctuation unchanged."""
-        return re.sub(r"[\s\-_]+", "", word)
+        return re.sub(r"[\s\-_]+", "", word or "")
 
     @staticmethod
     def clean_word(word: str,
