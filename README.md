@@ -1,29 +1,27 @@
 # GloVe-Word-Embeddings
 
-Library to quickly validate words and get them embedded for academic research. Design is based on Wang et al., 2026 (Nature Human Behaviour) and Olson et al., 2021 (PNAS).
+Library to quickly clean, validate, categorise and embed words for academic research.  
+Design is based on Wang et al., 2026 (*Nature Human Behaviour*) and Olson et al., 2021 (*PNAS*).
 
 This package has four parts:
 
-1. **pre** — clean and normalize words  
-2. **val** — validate against Olson’s list and WordNet nouns  
-3. **cat** — assign semantic / proper-noun categories (SI Rules 1–3)  
+1. **pre** — clean, normalise or lemmatize words  
+2. **val** — validate against Olson’s list or WordNet nouns  
+3. **cat** — classify to proper-noun buckets or WordNet categories
 4. **mod** — load embeddings and turn words or phrases into vectors  
 
-Helpers `list_models` and `clean_up` live at module level. Embeddings are hosted on an AWS S3 bucket and downloaded automatically on first use.
+Embedding models are hosted on an AWS S3 bucket and downloaded automatically on first use.  
+NLTK WordNet and names data are also downloaded automatically on first use of any category helper.
 
-## Install
+#### Installation
 
 ```bash
 pip install glove-word-embeddings
 ```
 
-NLTK WordNet and names data are downloaded automatically on first use of the category or noun helpers (a message appears only when data is actually missing).
+### Preprocessing (`pre`)
 
-
-
-## 1. Preprocessing (`pre`)
-
-Clean raw text before validation or embedding.
+Clean, normalize or lemmatize raw text before validation, classfication or embedding.
 
 ```python
 from glove_word_embeddings import pre
@@ -41,9 +39,13 @@ pre.clean_word("  The Cat! ")            # "cat"
 pre.clean_word("jar of jam")             # "jarjam"
 pre.clean_word("jar of jam", strip_space_bool=False)  # "jar jam"
 pre.clean_word("the", strip_stopword_bool=False)      # "the"
+
+# WordNet lemma (cached)
+pre.lemmatize("dogs")                    # "dog"
+pre.lemmatize("running", pos="v")        # "run"
 ```
 
-## 2. Validation (`val`)
+### Validation (`val`)
 
 Check words against Olson’s validated list and WordNet.
 
@@ -58,13 +60,14 @@ val.noun("quickly")      # False
 m = mod.load("glove-olson-validated")
 v = m.vocab_set()
 val.vocab("telescope", v)   # True
-val.vocab("ice cream", v)   # True if "ice_cream" / "ice-cream" / "ice cream" is in v
-val.vocab("", v)            # False
+val.vocab("ice cream", v)   # True if any of "ice cream" / "ice_cream" / "ice-cream" is in v
 ```
 
-## 3. Categorization (`cat`)
+### Categorization (`cat`)
 
-Flag responses that lean too heavily on one semantic group, room objects, or pure proper nouns (SI Rules 1–3).
+##### Categorize against a bucket of proper nouns
+
+Check if words are in certain semantic group, room objects, or pure proper nouns.
 
 ```python
 from glove_word_embeddings import cat
@@ -74,49 +77,68 @@ cat.check_common("apple")   # True
 cat.check_common("nike")    # False
 cat.check_common("aaron")   # False
 
-# Which categories does one word belong to?
-cat.check("dog")                           # {"animals"}
-cat.check("paris", check_common=False)     # {"places"}
-cat.check("apple", check_common=True)      # {"fruits"}  (not brands)
+# Which curated buckets does a word belong to?
+cat.check_bucket("dog")                              # {"animals"}
+cat.check_bucket("paris", check_common=False)        # {"places"}
+cat.check_bucket("apple", check_common=True)         # {"fruits"}  (not brands)
 
-# Count across a response
-cat.count(words)  # Rule 2: any category ≥ 5
-cat.count(words, name="environment")  # Rule 1
-cat.count(words, name="places", number_of_words=1, check_common=False)  # Rule 3 places
-cat.count(words, name="names",  number_of_words=1, check_common=True)   # Rule 3 names
-cat.count(words, name="brands", number_of_words=1, check_common=True)   # Rule 3 brands
+# Count across a list of words
+cat.count_bucket(words)                              # any bucket ≥ 5
+cat.count_bucket(words, name="environment")          # environment objects
+cat.count_bucket(words, name="places", number_of_words=1, check_common=False)
+cat.count_bucket(words, name="names",  number_of_words=1, check_common=True)
+cat.count_bucket(words, name="brands", number_of_words=1, check_common=True)
 ```
 
 `check_common=False` trusts the seed list (places, environment, semantic groups).  
 `check_common=True` drops a seed hit when the word is an ordinary common word (names / brands).
 
-Unknown `name=` values raise `ValueError`.
+##### Categorize against WordNet category chains
 
-## 4. Embedding (`mod`)
+Check if words are in certain WordNet categories, if different words share the same category. 
+
+```python
+# Full ladder (specific → general). Longest path by default.
+cat.category_chain("dog")
+# ['dog', 'canine', 'carnivore', 'placental', 'mammal', ...]
+
+# Shortest path if you prefer less depth
+cat.category_chain("dog", shortest_path=True)
+
+# Single rung (0 = most specific)
+cat.category_by_level("dog", level=0)     # 'dog'
+cat.category_by_level("dog", level=4)     # 'mammal' (typical)
+
+# Do two words share the same category at a given level?
+cat.check_same_category("dog", "wolf")           # True (default level=4)
+cat.check_same_category("dog", "wolf", level=1)  # True ('canine')
+
+# Most specific shared category name / its level on word1’s chain
+cat.category_shared_name("dog", "wolf")   # 'canine' (or similar)
+cat.category_shared_level("dog", "wolf")  # 1
+```
+
+### Embedding (`mod`)
 
 Load a vector model and embed single words or short phrases.
 
 ```python
-import glove_word_embeddings as gwe
 from glove_word_embeddings import mod
 
-gwe.__version__                   # installed package version
-gwe.list_models()                 # {key: filename, ...}
-
 m = mod.load("glove-6b-300d")     # downloads on first use, caches locally
-m.embed_exact("cat")              # exact match only -> np.ndarray or None
-m.vocab_set()                     # -> set of all words in the model
+m.embed_exact("cat")              # exact match only → np.ndarray or None
+m.vocab_set()                     # → set of all words in the model
 
 # Multi-word phrases
-m.embed_phrase("jar of jam")      # tries "jar of jam" / "jar_of_jam" / "jar-of-jam",
+m.embed_phrase("jar of jam")      # tries exact / underscore / hyphen variants,
                                   # otherwise averages the non-stopword parts
-
-gwe.clean_up()                    # deletes all cached files
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings`.
 
-## Citations
+### Citations
+
+If you like this package, please cite the relevant works. 
 
 Wang et al., (2026)
 ```

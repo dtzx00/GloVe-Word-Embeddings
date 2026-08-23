@@ -1,6 +1,8 @@
 from __future__ import annotations
 import nltk,requests,os,pickle,re,shutil,numpy as np
-from importlib.metadata import PackageNotFoundError, version
+from functools import lru_cache
+from nltk.stem import WordNetLemmatizer
+from importlib.metadata import PackageNotFoundError,version
 try:
     __version__ = version("glove-word-embeddings")
 except PackageNotFoundError:
@@ -30,13 +32,63 @@ FILES = {
 _valid_words = None
 _nltk_names = None
 _nltk_ready = False
+_lemmatizer = WordNetLemmatizer()
+
+def _ensure_nltk():
+    """Download WordNet and names on first use; raise clearly on failure."""
+    global _nltk_ready
+    if _nltk_ready:
+        return
+    from nltk.corpus import wordnet, names
+    try:
+        wordnet.synsets("dog")
+    except LookupError:
+        print("Downloading NLTK 'wordnet' data (one-time)…")
+        ok = nltk.download("wordnet", quiet=True)
+        if not ok:
+            raise RuntimeError(
+                "Failed to download NLTK 'wordnet' data. "
+                'Run: python -c "import nltk; nltk.download(\'wordnet\')"'
+            )
+        try:
+            wordnet.synsets("dog")
+        except LookupError as e:
+            raise RuntimeError(
+                "NLTK 'wordnet' data is still unavailable after download."
+            ) from e
+    try:
+        names.words()
+    except LookupError:
+        print("Downloading NLTK 'names' data (one-time)…")
+        ok = nltk.download("names", quiet=True)
+        if not ok:
+            raise RuntimeError(
+                "Failed to download NLTK 'names' data. "
+                'Run: python -c "import nltk; nltk.download(\'names\')"'
+            )
+        try:
+            names.words()
+        except LookupError as e:
+            raise RuntimeError(
+                "NLTK 'names' data is still unavailable after download."
+            ) from e
+    _nltk_ready = True
+
+    
+def _get_nltk_names():
+    global _nltk_names
+    _ensure_nltk()
+    if _nltk_names is None:
+        from nltk.corpus import names as nltk_names
+        _nltk_names = {n.lower() for n in nltk_names.words()}
+    return _nltk_names
 
 
-def list_models():
+def _list_models():
     return FILES
 
 
-def clean_up():
+def _clean_up():
     global _valid_words, _nltk_names, _nltk_ready
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
     _valid_words = None
@@ -107,13 +159,23 @@ class pre:
         return re.sub(r"[\s\-_]+", "", word or "")
     
     @staticmethod
+    @lru_cache(maxsize=100_000)
+    def lemmatize(word, pos: str = "n") -> str | None:
+        """WordNet lemma. Default pos='n' (noun). Returns None if missing/empty."""
+        w = pre.clean_word(word)
+        if not w:
+            return None
+        _ensure_nltk()
+        return _lemmatizer.lemmatize(w.replace("_", " "), pos=pos)    
+    
+    @staticmethod
     def clean_word(word,
                    return_lowercase_bool: bool = True,
                    strip_stopword_bool: bool = True,
                    strip_marks_bool: bool = True,
                    strip_space_bool: bool = True):
         """Normalize a word or phrase. Return None if missing / empty / 'nan' / 'none'."""
-        if word is None or word is np.nan:
+        if word is None or (isinstance(word, float) and np.isnan(word)):
             return None
         token = str(word).strip()
         if not token or token.lower() in {"nan", "none"}:
@@ -140,6 +202,8 @@ class val:
             _valid_words = mod.load("olson-validated-words")
 
         w = pre.clean_word(word) if clean else word
+        if w is None:
+            return False
         if space_check and not pre.space_check(w):
             return False
         return w in _valid_words
@@ -147,7 +211,7 @@ class val:
     @staticmethod
     def noun(word: str) -> bool:
         """Return True if the word has at least one noun synset in WordNet."""
-        cat._ensure_nltk()
+        _ensure_nltk()
         from nltk.corpus import wordnet as wn
 
         w = pre.clean_word(word)
@@ -171,7 +235,7 @@ class val:
 
 class cat:
     # name -> (WordNet ancestor synset or None, seed words)
-    CATEGORIES = {
+    BUCKETS = {
         "animals": ("animal.n.01", {
             "dog", "cat", "lion", "tiger", "bear", "elephant", "horse",
             "cow", "sheep", "goat", "pig", "wolf", "fox", "deer", "rabbit",
@@ -354,104 +418,34 @@ class cat:
         "names": (None, None),  # filled lazily from nltk.corpus.names
     }
 
-    @staticmethod
-    def _ensure_nltk():
-        """Download WordNet and names on first use; raise clearly on failure.
-
-        Uses a functional check (can we look up a word?) instead of path probing,
-        because WordNet is often stored as corpora/wordnet.zip and never unpacked.
-        """
-        global _nltk_ready
-        if _nltk_ready:
-            return
-
-        from nltk.corpus import wordnet, names
-
-        try:
-            wordnet.synsets("dog")
-        except LookupError:
-            print("Downloading NLTK 'wordnet' data (one-time)…")
-            ok = nltk.download("wordnet", quiet=True)
-            if not ok:
-                raise RuntimeError(
-                    "Failed to download NLTK 'wordnet' data. "
-                    'Run: python -c "import nltk; nltk.download(\'wordnet\')"'
-                )
-            try:
-                wordnet.synsets("dog")
-            except LookupError as e:
-                raise RuntimeError(
-                    "NLTK 'wordnet' data is still unavailable after download."
-                ) from e
-
-        try:
-            names.words()
-        except LookupError:
-            print("Downloading NLTK 'names' data (one-time)…")
-            ok = nltk.download("names", quiet=True)
-            if not ok:
-                raise RuntimeError(
-                    "Failed to download NLTK 'names' data. "
-                    'Run: python -c "import nltk; nltk.download(\'names\')"'
-                )
-            try:
-                names.words()
-            except LookupError as e:
-                raise RuntimeError(
-                    "NLTK 'names' data is still unavailable after download."
-                ) from e
-
-        _nltk_ready = True
-
-    @staticmethod
-    def _get_nltk_names():
-        global _nltk_names
-        cat._ensure_nltk()
-        if _nltk_names is None:
-            from nltk.corpus import names as nltk_names
-            _nltk_names = {n.lower() for n in nltk_names.words()}
-        return _nltk_names
-
+    
     @staticmethod
     def check_common(word: str, n_senses: int = 2) -> bool:
-        """True if the word has at least n_senses common-noun senses in WordNet.
-
-        Proper nouns (Aaron, London, Nike) are stored in WordNet as 'instance'
-        synsets, so they are not counted. A word only counts as common if it has
-        enough ordinary noun senses of its own — this is what separates 'apple'
-        (the fruit) from 'nike' (only ever a name).
-        """
-        cat._ensure_nltk()
+        """True if the word has ≥ n_senses ordinary (non-instance) noun senses."""
+        _ensure_nltk()
         from nltk.corpus import wordnet as wn
-
         word = pre.clean_word(word)
+        if not word:
+            return False
         common = [s for s in wn.synsets(word, pos=wn.NOUN) if not s.instance_hypernyms()]
         return len(common) >= n_senses
 
     @staticmethod
-    def check(word: str, check_common: bool = False, n_senses: int = 2) -> set[str]:
-        """Return the set of category names a single word belongs to.
-
-        Membership is decided by seed list or WordNet hypernym ancestry.
-        If check_common=True, a seed hit is dropped when the word is an ordinary
-        common word — so 'apple' is not flagged as a brand, while 'nike' is.
-        """
-        cat._ensure_nltk()
+    def check_bucket(word: str, check_common: bool = False, n_senses: int = 2) -> set[str]:
+        """Return the set of curated bucket names a word belongs to."""
+        _ensure_nltk()
         from nltk.corpus import wordnet as wn
-
         word = pre.clean_word(word)
+        if not word:
+            return set()
         out = set()
-
-        for name, (syn, seeds) in cat.CATEGORIES.items():
+        for name, (syn, seeds) in cat.BUCKETS.items():
             if name == "names":
-                seeds = cat._get_nltk_names()
-
+                seeds = _get_nltk_names()
             if seeds is not None and word in seeds:
                 if not (check_common and cat.check_common(word, n_senses)):
                     out.add(name)
                     continue
-                # common word: fall through to the WordNet check below
-
             if syn is not None:
                 ancestor = wn.synset(syn)
                 if any(
@@ -460,41 +454,104 @@ class cat:
                     for path in s.hypernym_paths()
                 ):
                     out.add(name)
-
         return out
 
     @staticmethod
-    def count(
+    def count_bucket(
         words: list,
         number_of_words: int = 5,
         name: str | None = None,
         check_common: bool = False,
         n_senses: int = 2,
     ) -> bool:
-        """True if ≥ number_of_words of the words belong to the same category.
-
-        - name=None          → any category (SI Rule 2)
-        - name="environment" → environment objects (SI Rule 1)
-        - name="places" with check_common=False, number_of_words=1 → SI Rule 3 places
-        - name="names"/"brands" with check_common=True, number_of_words=1 → SI Rule 3
+        """True if ≥ number_of_words of the words belong to the same bucket.
+        - name=None → any bucket
+        - name="environment" → environment objects
+        - name="places" / "names" / "brands" → SI place / name rules
         """
-        if name is not None and name not in cat.CATEGORIES:
+        if name is not None and name not in cat.BUCKETS:
             raise ValueError(
-                f"Unknown category {name!r}. Valid names: {sorted(cat.CATEGORIES)}"
-            )
-
-        targets = [name] if name else list(cat.CATEGORIES)
+                f"Unknown bucket {name!r}. Valid names: {sorted(cat.BUCKETS)}")
+        targets = [name] if name else list(cat.BUCKETS)
         counts = {c: 0 for c in targets}
-
         for w in words:
-            found = cat.check(w, check_common=check_common, n_senses=n_senses)
+            found = cat.check_bucket(w, check_common=check_common, n_senses=n_senses)
             for key in targets:
                 if key in found:
                     counts[key] += 1
-
         return max(counts.values()) >= number_of_words
 
+    # ------------------------------------------------------------------
+    # Categories (WordNet hierarchy)
+    # ------------------------------------------------------------------
 
+    @staticmethod
+    @lru_cache(maxsize=100_000)
+    def category_chain(word, shortest_path: bool = False) -> list | None:
+        """WordNet category ladder for a noun, specific → general.
+        By default the longest path is used (richer hierarchy).
+        Set shortest_path=True for the shortest path instead.
+        e.g. cat.category_chain("dog")
+        → ['dog', 'canine', 'carnivore', 'placental', 'mammal', ...]
+        """
+        _ensure_nltk()
+        from nltk.corpus import wordnet as wn
+        w = pre.clean_word(word) or ""
+        if not w:
+            return None
+        morphy = wn.morphy(w.replace(" ", "_"), wn.NOUN) or w.replace(" ", "_")
+        synsets = wn.synsets(morphy, pos=wn.NOUN)
+        if not synsets:
+            return None
+        paths = synsets[0].hypernym_paths()
+        if not paths:
+            return None
+        # NLTK returns root → leaf; reverse so we get specific → general
+        if shortest_path:
+            best = min(paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
+        else:
+            best = max(paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
+        return [node.name().split(".")[0] for node in reversed(best)]
+
+    @staticmethod
+    def category_by_level(word, level: int = 4) -> str | None:
+        """WordNet category name at one rung (0 = most specific)."""
+        chain = cat.category_chain(word)
+        if not chain or level < 0 or level >= len(chain):
+            return None
+        return chain[level]
+
+    @staticmethod
+    def check_same_category(word1, word2, level: int = 4) -> bool:
+        """True if both words share the same WordNet category at this level."""
+        c1 = cat.category_by_level(word1, level)
+        c2 = cat.category_by_level(word2, level)
+        return c1 is not None and c1 == c2
+
+    @staticmethod
+    def category_shared_name(word1, word2) -> str | None:
+        """Most specific WordNet category name shared by both words."""
+        c1 = cat.category_chain(word1)
+        c2 = cat.category_chain(word2)
+        if not c1 or not c2:
+            return None
+        set2 = set(c2)
+        for name in c1:  # specific → general; first hit = most specific shared
+            if name in set2:
+                return name
+        return None
+
+    @staticmethod
+    def category_shared_level(word1, word2) -> int | None:
+        """Level on word1's chain of the most specific shared WordNet category.
+        0 = the words themselves match; higher = broader.
+        """
+        name = cat.category_shared_name(word1, word2)
+        if name is None:
+            return None
+        return cat.category_chain(word1).index(name)
+    
+    
 # --- 4. mod: word embeddings -----------------------------------------------
 
 class mod:
