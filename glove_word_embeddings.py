@@ -98,33 +98,35 @@ class pre:
 
     @staticmethod
     def space_check(word: str) -> bool:
-        """True if the word is a single token with no spacing. Matches README: cat→True, 'jar of jam'→False."""
+        """True if the word is a single token with no spacing, e.g., 'jar of jam'→False."""
         return not pre.check_space(word)
 
     @staticmethod
     def strip_space(word: str) -> str:
         """Return word without spacing. Punctuation unchanged."""
         return re.sub(r"[\s\-_]+", "", word or "")
-
+    
     @staticmethod
-    def clean_word(word: str,
+    def clean_word(word,
                    return_lowercase_bool: bool = True,
                    strip_stopword_bool: bool = True,
                    strip_marks_bool: bool = True,
-                   strip_space_bool: bool = True) -> str:
-        """Normalize a word or phrase. Optionally drop stopwords, punctuation, spacing."""
-        if (word) and (word is not np.nan):
-            if return_lowercase_bool:
-                word = pre.return_lowercase(word)
-            if strip_stopword_bool:
-                word = pre.strip_stopword(word)
-            if strip_marks_bool:
-                word = pre.strip_marks(word)
-            if strip_space_bool:
-                word = pre.strip_space(word)
-            return word
-        else:
+                   strip_space_bool: bool = True):
+        """Normalize a word or phrase. Return None if missing / empty / 'nan' / 'none'."""
+        if word is None or word is np.nan:
             return None
+        token = str(word).strip()
+        if not token or token.lower() in {"nan", "none"}:
+            return None
+        if return_lowercase_bool:
+            token = pre.return_lowercase(token)
+        if strip_stopword_bool:
+            token = pre.strip_stopword(token)
+        if strip_marks_bool:
+            token = pre.strip_marks(token)
+        if strip_space_bool:
+            token = pre.strip_space(token)
+        return token or None
 
 
 # --- 2. val: validate words ------------------------------------------------
