@@ -487,12 +487,10 @@ class cat:
 
     @staticmethod
     @lru_cache(maxsize=100_000)
-    def category_chain(word, shortest_path: bool = False) -> list | None:
-        """WordNet category ladder for a noun, specific → general.
-        By default the longest path is used (richer hierarchy).
-        Set shortest_path=True for the shortest path instead.
-        e.g. cat.category_chain("dog")
-        → ['dog', 'canine', 'carnivore', 'placental', 'mammal', ...]
+    def category_chain(word, shortest_path: bool = True) -> list | None:
+        """WordNet category ladder for a noun, general → specific.
+        By default the shortest path is used.
+        Set shortest_path=False for the longest path instead.
         """
         _ensure_nltk()
         from nltk.corpus import wordnet as wn
@@ -511,7 +509,7 @@ class cat:
             best = min(paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
         else:
             best = max(paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
-        return [node.name().split(".")[0] for node in reversed(best)]
+        return [node.name().split(".")[0] for node in best]
 
     @staticmethod
     def category_by_level(word, level: int = 4) -> str | None:
