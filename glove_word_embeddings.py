@@ -487,29 +487,74 @@ class cat:
 
     @staticmethod
     @lru_cache(maxsize=100_000)
-    def category_chain(word, shortest_path: bool = True) -> list | None:
-        """WordNet category ladder for a noun, general → specific.
-        By default the shortest path is used.
-        Set shortest_path=False for the longest path instead.
+    def category_chain(
+        word,
+        path: str = "long",                  # "long" | "short" | "full"
+        sense: str = "primary",              # "primary" | "union"
+    ) -> list | None:
+        """WordNet category ladder, general → specific, excluding the word itself.
+
+        path
+            "short" – shortest hypernym path among the chosen sense(s)
+            "long"  – longest hypernym path among the chosen sense(s)
+            "full"  – every unique ancestor that appears on any path of the chosen sense(s)
+
+        sense
+            "primary" – use only the first (most frequent) noun synset
+            "union"   – combine all noun synsets of the word
         """
+        if path not in {"short", "long", "full"}:
+            raise ValueError(f"path must be 'short', 'long' or 'full', got {path!r}")
+        if sense not in {"primary", "union"}:
+            raise ValueError(f"sense must be 'primary' or 'union', got {sense!r}")
+
         _ensure_nltk()
         from nltk.corpus import wordnet as wn
+
         w = pre.clean_word(word) or ""
         if not w:
             return None
+
         morphy = wn.morphy(w.replace(" ", "_"), wn.NOUN) or w.replace(" ", "_")
         synsets = wn.synsets(morphy, pos=wn.NOUN)
         if not synsets:
             return None
-        paths = synsets[0].hypernym_paths()
-        if not paths:
+
+        # ---------- sense selection ----------
+        if sense == "primary":
+            target_synsets = synsets[:1]
+        else:  # "union"
+            target_synsets = synsets
+
+        # Collect every hypernym path from the chosen senses
+        all_paths = []
+        for syn in target_synsets:
+            all_paths.extend(syn.hypernym_paths())
+        if not all_paths:
             return None
-        # NLTK returns root → leaf; reverse so we get specific → general
-        if shortest_path:
-            best = min(paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
-        else:
-            best = max(paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
-        return [node.name().split(".")[0] for node in best]
+
+        # ---------- path selection ----------
+        if path == "short":
+            best = min(all_paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
+            ordered = best[:-1]                    # drop the leaf
+            return [n.name().split(".")[0] for n in ordered]
+
+        if path == "long":
+            best = max(all_paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
+            ordered = best[:-1]
+            return [n.name().split(".")[0] for n in ordered]
+
+        # path == "full" → unique ancestors ordered by depth
+        depth = {}
+        for p in all_paths:
+            for i, node in enumerate(p[:-1]):      # already exclude every leaf
+                name = node.name().split(".")[0]
+                # keep the deepest occurrence so more specific placement is preferred
+                if name not in depth or i > depth[name]:
+                    depth[name] = i
+
+        # general (low depth) → specific (high depth)
+        return sorted(depth, key=lambda n: (depth[n], n))
 
     @staticmethod
     def category_by_level(word, level: int = 4) -> str | None:
