@@ -63,6 +63,7 @@ val.vocab("telescope", v)   # True
 val.vocab("ice cream", v)   # True if any of "ice cream" / "ice_cream" / "ice-cream" is in v
 ```
 
+
 ### Categorization (`cat`)
 
 ##### Categorize against a bucket of proper nouns
@@ -95,27 +96,35 @@ cat.count_bucket(words, name="brands", number_of_words=1, check_common=True)
 
 ##### Categorize against WordNet category chains
 
-Check if words are in certain WordNet categories, if different words share the same category. 
+Return the hypernym ladder of a word (general → specific). The word itself is **never** included in the list.
 
 ```python
-# Full ladder (specific → general). Longest path by default.
+from glove_word_embeddings import cat
+
+# Default: longest path of the primary (most frequent) sense
 cat.category_chain("dog")
-# ['dog', 'canine', 'carnivore', 'placental', 'mammal', ...]
+# ['entity', 'physical_entity', 'object', 'whole', 'living_thing',
+#  'organism', 'animal', 'chordate', 'vertebrate', 'mammal',
+#  'placental', 'carnivore', 'canine']
 
-# Shortest path if you prefer less depth
-cat.category_chain("dog", shortest_path=True)
+# Shortest path
+cat.category_chain("dog", path="short")
+# ['entity', 'physical_entity', 'object', 'whole', 'living_thing',
+#  'organism', 'animal', 'domestic_animal']
 
-# Single rung (0 = most specific)
-cat.category_by_level("dog", level=0)     # 'dog'
-cat.category_by_level("dog", level=4)     # 'mammal' (typical)
+# Full set of ancestors (union of every path of the primary sense)
+cat.category_chain("dog", path="full")
+# ['entity', 'physical_entity', 'object', 'whole', 'living_thing',
+#  'organism', 'animal', 'chordate', 'domestic_animal', 'vertebrate',
+#  'mammal', 'placental', 'carnivore', 'canine']
 
-# Do two words share the same category at a given level?
-cat.check_same_category("dog", "wolf")           # True (default level=4)
-cat.check_same_category("dog", "wolf", level=1)  # True ('canine')
+# Ambiguous words – primary sense only (default)
+cat.category_chain("badger", path="full")
+# → hierarchy of the “Wisconsin inhabitant” sense
 
-# Most specific shared category name / its level on word1’s chain
-cat.category_shared_name("dog", "wolf")   # 'canine' (or similar)
-cat.category_shared_level("dog", "wolf")  # 1
+# Ambiguous words – union of *all* senses
+cat.category_chain("badger", path="full", sense="union")
+# → merges the person hierarchy and the animal hierarchy
 ```
 
 ### Embedding (`mod`)
