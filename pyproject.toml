@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glove-word-embeddings"
-version = "0.1.15"
+version = "0.1.16"
 description = "Validate, categorize, and embed words for academic research (Wang et al., 2026 and Olson et al., 2021)"
 readme = "README.md"
 requires-python = ">=3.9"

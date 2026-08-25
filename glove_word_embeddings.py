@@ -564,7 +564,7 @@ class cat:
 
     @staticmethod
     def category_by_level(word, level: int = 4) -> str | None:
-        """WordNet category name at one rung (0 = most general)."""
+        """WordNet category name at one rung (0 = entity / most general)."""
         chain = cat.category_chain(word)
         if not chain or level < 0 or level >= len(chain):
             return None
