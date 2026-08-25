@@ -501,8 +501,14 @@ class cat:
 
         sense
             "primary" – use only the first (most frequent) noun synset
-            "union"   – combine all noun synsets of the word
-        """
+            "union"   – combine all noun synsets of the word"""
+        
+        # Note: this order (general → specific) matches the list order of 
+        # NLTK’s hypernym_paths() (root first) but is the opposite of the 
+        # specific-to-general order commonly obtained by reversing paths, 
+        # by closure(hypernyms), or by many WordNet tutorial examples. 
+        # Users porting code that assumes the reverse should be aware.
+        
         if path not in {"short", "long", "full"}:
             raise ValueError(f"path must be 'short', 'long' or 'full', got {path!r}")
         if sense not in {"primary", "union"}:
@@ -558,7 +564,7 @@ class cat:
 
     @staticmethod
     def category_by_level(word, level: int = 4) -> str | None:
-        """WordNet category name at one rung (0 = most specific)."""
+        """WordNet category name at one rung (0 = most general)."""
         chain = cat.category_chain(word)
         if not chain or level < 0 or level >= len(chain):
             return None
@@ -579,16 +585,17 @@ class cat:
         if not c1 or not c2:
             return None
         set2 = set(c2)
-        for name in c1:  # specific → general; first hit = most specific shared
+        
+        for name in reversed(c1):
             if name in set2:
                 return name
         return None
 
     @staticmethod
     def category_shared_level(word1, word2) -> int | None:
-        """Level on word1's chain of the most specific shared WordNet category.
-        0 = the words themselves match; higher = broader.
-        """
+        """Index on word1’s general→specific chain of the most specific shared category.
+        0 = most general / broadest; higher index = more specific.
+        (The word itself is never present in the chain.)"""
         name = cat.category_shared_name(word1, word2)
         if name is None:
             return None
