@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "glove-word-embeddings"
-version = "0.1.17"
+version = "0.1.19"
 description = "Preprocess, validate, categorize, and finally embed words for academic research (Wang et al., 2026, Olson et al., 2021 and Beaty & Johnson, 2021)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [{name = "Dawei Wang"}]
-dependencies = ["requests", "numpy", "nltk"]
 urls = {Homepage = "https://github.com/dtzx00/GloVe-Word-Embeddings"}
+dependencies = ["requests", "numpy", "nltk", "transformers", "torch"]
 
 [tool.setuptools]
 py-modules = ["glove_word_embeddings"]

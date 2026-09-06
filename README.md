@@ -149,6 +149,7 @@ Load a vector model and embed single words or short phrases. Embedding models av
 | `flair-olson-twitter` | — | Flair Twitter embeddings kept only for Olson common words. |
 | `flair-olson-turian` | — | Flair Turian embeddings kept only for Olson common words. |
 | `flair-olson-random` | — | Flair random embeddings kept only for Olson common words. |
+| `bert-large` | 1024 | BERT-large uncased (Johnson et al., 2023). Context-dependent. |
 
 ```python
 from glove_word_embeddings import mod
@@ -159,6 +160,7 @@ m = mod.load("cbow-baroni-400d")
 m = mod.load("cbow-ukwac-subs-300d")
 m = mod.load("cbow-subs-300d")
 m = mod.load("glove-olson-validated")
+m = mod.load("bert-large")
 
 m.embed_exact("cat")                   # exact match only → np.ndarray or None
 m.vocab_set()                          # → set of all words in the model
@@ -185,4 +187,8 @@ Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E. (2021).
 Beaty & Johnson, (2021) -- Other labs
 ```markdown
 Beaty, R. E., & Johnson, D. R. (2021). Automating creativity assessment with SemDis: An open platform for computing semantic distance. Behavior Research Methods, 53(2), 757–780. https://doi.org/10.3758/s13428-020-01453-w
+```
+Johnson et al., (2023) -- Other labs
+```markdown
+Johnson, D. R., Kaufman, J. C., Baker, B. S., Patterson, J. D., Barbot, B., Green, A. E., van Hell, J., Kennedy, E., Sullivan, G. F., Taylor, C. L., Ward, T., & Beaty, R. E. (2023). Divergent semantic integration (DSI): Extracting creativity from narratives with distributional semantic modeling. Behavior Research Methods, 55(7), 3726–3759. https://doi.org/10.3758/s13428-022-01986-2
 ```

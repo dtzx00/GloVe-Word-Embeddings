@@ -607,6 +607,55 @@ class cat:
     
 # --- 4. mod: word embeddings -----------------------------------------------
 
+class BertMod:
+    """BERT-large, layers 6 and 7 (Johnson et al., 2023)."""
+
+    def __init__(self, model_name="bert-large-uncased", layers=(6, 7)):
+        try:
+            from transformers import AutoModel, AutoTokenizer
+            import torch
+        except ImportError as e:
+            raise ImportError(
+                "BERT needs extra packages. Run: pip install transformers torch"
+            ) from e
+
+        self._torch = torch
+        cache = os.path.join(CACHE_DIR, "huggingface")
+        os.makedirs(cache, exist_ok=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache)
+        self.model = AutoModel.from_pretrained(
+            model_name, cache_dir=cache, output_hidden_states=True
+        )
+        self.model.eval()
+        self.layers = layers
+
+    def _embed_text(self, text):
+        torch = self._torch
+        encoded = self.tokenizer(
+            text, return_tensors="pt", truncation=True, max_length=512
+        )
+        with torch.no_grad():
+            out = self.model(**encoded)
+        hidden = torch.stack([out.hidden_states[i] for i in self.layers], dim=0)
+        token_vecs = hidden.mean(dim=0)[0][1:-1]
+        if token_vecs.shape[0] == 0:
+            return None
+        return token_vecs.mean(dim=0).cpu().numpy().astype(np.float32)
+
+    def embed_exact(self, word):
+        if not word:
+            return None
+        return self._embed_text(word)
+
+    def embed_phrase(self, phrase):
+        phrase = (phrase or "").strip()
+        if not phrase:
+            return None
+        return self._embed_text(phrase)
+
+    def vocab_set(self):
+        return set(self.tokenizer.get_vocab())
+
 class mod:
     def __init__(self, vectors: dict):
         self.vectors = vectors
@@ -614,8 +663,11 @@ class mod:
     @staticmethod
     def load(key: str, force_download: bool = False):
         """Download `key` if not cached, then return a mod (or word set for the wordlist)."""
+        if key == "bert-large":
+            return BertMod()
+
         if key not in FILES:
-            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES)}")
+            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES) + ['bert-large']}")
 
         filename = FILES[key]
         os.makedirs(CACHE_DIR, exist_ok=True)
