@@ -16,6 +16,10 @@ CACHE_DIR = os.environ.get(
 FILES = {
     "glove-840b-300d": "glove.840B.300d.pickle",
     "glove-6b-300d": "glove.6B.300d.pickle",
+    "tasa-lsa-300d": "tasa.lsa.300d.pickle",
+    "cbow-baroni-400d": "cbow.baroni.400d.pickle",
+    "cbow-ukwac-subs-300d": "cbow.ukwac.subs.300d.pickle",
+    "cbow-subs-300d": "cbow.subs.300d.pickle",
     "dolma-300-2024-1m": "dolma_300_2024_1M.pickle",
     "wiki-news-300d-1m": "wiki-news-300d-1M.pickle",
     "glove-olson-validated": "glove_olson_validated.pickle",
@@ -26,8 +30,7 @@ FILES = {
     "flair-olson-twitter": "flair_olson_common_words_twitter.pickle",
     "flair-olson-turian": "flair_olson_common_words_turian.pickle",
     "flair-olson-random": "flair_olson_common_words_random.pickle",
-    "olson-validated-words": "olson_validated_100k_words.txt",
-}
+    "olson-validated-words": "olson_validated_100k_words.txt",}
 
 _valid_words = None
 _nltk_names = None

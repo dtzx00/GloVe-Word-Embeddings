@@ -129,36 +129,60 @@ cat.category_chain("badger", path="full", sense="union")
 
 ### Embedding (`mod`)
 
-Load a vector model and embed single words or short phrases.
+Load a vector model and embed single words or short phrases. Embedding models available:
+
+| Key | Dimensions | What it is |
+| --- | --- | --- |
+| `glove-6b-300d` | 300 | Stanford GloVe trained on Wikipedia + Gigaword (6B tokens). |
+| `glove-840b-300d` | 300 | Stanford GloVe trained on Common Crawl (840B tokens). |
+| `tasa-lsa-300d` | 300 | TASA latent semantic analysis space (Günther), used in SemDis. |
+| `cbow-baroni-400d` | 400 | Baroni et al. (2014) best-predict CBOW, used in SemDis. |
+| `cbow-ukwac-subs-300d` | 300 | Mandera et al. CBOW trained on ukWaC + subtitles, used in SemDis. |
+| `cbow-subs-300d` | 300 | Mandera et al. CBOW trained on subtitles only, used in SemDis. |
+| `wiki-news-300d-1m` | 300 | fastText English vectors trained on Wikipedia + news (1M words). |
+| `dolma-300-2024-1m` | 300 | GloVe vectors trained on the 2024 Dolma corpus (1M words). |
+| `glove-olson-validated` | 300 | GloVe vectors kept only for words on Olson et al. (2021)'s list. |
+| `flair-olson-glove` | — | Flair GloVe embeddings kept only for Olson common words. |
+| `flair-olson-extvec` | — | Flair Komninos (extvec) embeddings kept only for Olson common words. |
+| `flair-olson-crawl` | — | Flair FastText crawl embeddings kept only for Olson common words. |
+| `flair-olson-news` | — | Flair FastText news embeddings kept only for Olson common words. |
+| `flair-olson-twitter` | — | Flair Twitter embeddings kept only for Olson common words. |
+| `flair-olson-turian` | — | Flair Turian embeddings kept only for Olson common words. |
+| `flair-olson-random` | — | Flair random embeddings kept only for Olson common words. |
 
 ```python
 from glove_word_embeddings import mod
 
-m = mod.load("glove-6b-300d")     # downloads on first use, caches locally
-m.embed_exact("cat")              # exact match only → np.ndarray or None
-m.vocab_set()                     # → set of all words in the model
+m = mod.load("glove-6b-300d")          # downloads on first use, caches locally
+m = mod.load("tasa-lsa-300d")
+m = mod.load("cbow-baroni-400d")
+m = mod.load("cbow-ukwac-subs-300d")
+m = mod.load("cbow-subs-300d")
+m = mod.load("glove-olson-validated")
+
+m.embed_exact("cat")                   # exact match only → np.ndarray or None
+m.vocab_set()                          # → set of all words in the model
 
 # Multi-word phrases
-m.embed_phrase("jar of jam")      # tries exact / underscore / hyphen variants,
-                                  # otherwise averages the non-stopword parts
+m.embed_phrase("jar of jam")           # tries exact / underscore / hyphen variants,
+                                       # otherwise averages the non-stopword parts
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings`.
 
 ### Citations
 
-If you like this package, please cite the relevant works. 
+If you like this package, please cite the relevant works.
 
-Wang et al., (2026)
+Wang et al., (2026) -- Package owner
+```markdown
+Wang, D., Huang, D., Shen, H., & Uzzi, B. (2026). A large-scale comparison of divergent creativity in humans and large language models. Nature Human Behaviour, 10(3), 531–540. https://doi.org/10.1038/s41562-025-02331-1
 ```
-Wang, D., Huang, D., Shen, H., & Uzzi, B. (2026). A large-scale comparison of
-divergent creativity in humans and large language models. Nature Human
-Behaviour, 10(3), 531–540. https://doi.org/10.1038/s41562-025-02331-1
+Olson et al., (2021) -- Other labs
+```markdown
+Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E. (2021). Naming unrelated words predicts creativity. Proceedings of the National Academy of Sciences, 118(25), e2022340118. https://doi.org/10.1073/pnas.2022340118
 ```
-Olson et al., (2021)
-```
-Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E.
-(2021). Naming unrelated words predicts creativity. Proceedings of the
-National Academy of Sciences, 118(25), e2022340118.
-https://doi.org/10.1073/pnas.2022340118
+Beaty & Johnson, (2021) -- Other labs
+```markdown
+Beaty, R. E., & Johnson, D. R. (2021). Automating creativity assessment with SemDis: An open platform for computing semantic distance. Behavior Research Methods, 53(2), 757–780. https://doi.org/10.3758/s13428-020-01453-w
 ```
