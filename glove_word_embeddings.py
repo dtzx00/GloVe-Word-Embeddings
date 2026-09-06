@@ -663,12 +663,15 @@ class mod:
     @staticmethod
     def load(key: str, force_download: bool = False):
         """Download `key` if not cached, then return a mod (or word set for the wordlist)."""
+        
         if key == "bert-large":
-            return BertMod()
-
+            return BertMod("bert-large-uncased")
+        if key == "bert-base":
+            return BertMod("bert-base-uncased")
         if key not in FILES:
-            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES) + ['bert-large']}")
-
+            raise KeyError(
+                f"Unknown key {key!r}. Valid keys: {sorted(FILES)+['bert-base','bert-large']}")
+            
         filename = FILES[key]
         os.makedirs(CACHE_DIR, exist_ok=True)
         path = os.path.join(CACHE_DIR, filename)

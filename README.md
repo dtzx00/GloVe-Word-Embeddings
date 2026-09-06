@@ -150,6 +150,7 @@ Load a vector model and embed single words or short phrases. Embedding models av
 | `flair-olson-turian` | — | Flair Turian embeddings kept only for Olson common words. |
 | `flair-olson-random` | — | Flair random embeddings kept only for Olson common words. |
 | `bert-large` | 1024 | BERT-large uncased (Johnson et al., 2023). Context-dependent. |
+| `bert-base` | 768 | BERT-base uncased. Context-dependent. Smaller and faster. |
 
 ```python
 from glove_word_embeddings import mod
