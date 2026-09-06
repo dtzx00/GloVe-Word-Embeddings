@@ -107,6 +107,50 @@ class pre:
         "for", "with", "at", "by", "from", "as", "into", "onto", "upon", "over",
         "under", "about", "between", "through", "is", "are", "was", "were", "ah",
         "be", "been", "being", "this", "that", "these", "those", "it", "its"}
+    
+    @staticmethod
+    @lru_cache(maxsize=4)
+    def stopword_set(how: str = "light") -> set[str]:
+        """light = built-in 39-word list.
+        heavy = that list ∪ NLTK English (SemDis / tm; Beaty & Johnson 2021)."""
+        how = (how or "light").lower()
+        if how == "light":
+            return pre.STOPWORDS
+        if how == "heavy":
+            from nltk.corpus import stopwords as nltk_stopwords
+            try:
+                words = nltk_stopwords.words("english")
+            except LookupError:
+                print("Downloading NLTK 'stopwords' data (one-time)…")
+                ok = nltk.download("stopwords", quiet=True)
+                if not ok:
+                    raise RuntimeError(
+                        "Failed to download NLTK 'stopwords' data. "
+                        "Run: python -c \"import nltk; nltk.download('stopwords')\""
+                    )
+                words = nltk_stopwords.words("english")
+            return pre.STOPWORDS | {w.lower() for w in words}
+        raise ValueError(f"how must be 'light' or 'heavy', got {how!r}")
+
+    @staticmethod
+    def check_stopword(word: str, how: str = "light") -> bool:
+        """True if the word / phrase contains a stopword."""
+        return word != pre.strip_stopword(word, how=how)
+
+    @staticmethod
+    def strip_stopword(word: str, how: str = "light") -> str:
+        """Return the phrase with stopwords removed (as joined string)."""
+        stops = pre.stopword_set(how)
+        tokens = (word or "").split()
+        return " ".join(w for w in tokens if w.lower() not in stops)
+
+    @staticmethod
+    def remove_stopwords(phrase: str, how: str = "light") -> list[str]:
+        """Return list of non-stopword tokens."""
+        if not phrase:
+            return []
+        stops = pre.stopword_set(how)
+        return [w for w in phrase.split() if w.lower() not in stops]    
 
     @staticmethod
     def check_lowercase(word: str) -> bool:
@@ -117,24 +161,6 @@ class pre:
     def return_lowercase(word: str) -> str:
         """Return word in lowercase."""
         return word.lower()
-
-    @staticmethod
-    def check_stopword(word: str) -> bool:
-        """True if the word / phrase contains a stopword."""
-        return not (word == pre.strip_stopword(word))
-
-    @staticmethod
-    def strip_stopword(word: str) -> str:
-        """Return the phrase with stopwords removed (as joined string)."""
-        tokens = (word or "").split()
-        return " ".join(w for w in tokens if w.lower() not in pre.STOPWORDS)
-
-    @staticmethod
-    def remove_stopwords(phrase: str) -> list[str]:
-        """Return list of non-stopword tokens. Matches README and embed_phrase usage."""
-        if not phrase:
-            return []
-        return [w for w in phrase.split() if w.lower() not in pre.STOPWORDS]
 
     @staticmethod
     def check_marks(word: str) -> bool:
@@ -163,20 +189,21 @@ class pre:
     
     @staticmethod
     @lru_cache(maxsize=100_000)
-    def lemmatize(word, pos: str = "n") -> str | None:
+    def lemmatize(word, pos: str = "n", how: str = "light") -> str | None:
         """WordNet lemma. Default pos='n' (noun). Returns None if missing/empty."""
-        w = pre.clean_word(word)
+        w = pre.clean_word(word, how=how)
         if not w:
             return None
         _ensure_nltk()
-        return _lemmatizer.lemmatize(w.replace("_", " "), pos=pos)    
-    
+        return _lemmatizer.lemmatize(w.replace("_", " "), pos=pos)
+
     @staticmethod
     def clean_word(word,
                    return_lowercase_bool: bool = True,
                    strip_stopword_bool: bool = True,
                    strip_marks_bool: bool = True,
-                   strip_space_bool: bool = True):
+                   strip_space_bool: bool = True,
+                   how: str = "light"):
         """Normalize a word or phrase. Return None if missing / empty / 'nan' / 'none'."""
         if word is None or (isinstance(word, float) and np.isnan(word)):
             return None
@@ -186,7 +213,7 @@ class pre:
         if return_lowercase_bool:
             token = pre.return_lowercase(token)
         if strip_stopword_bool:
-            token = pre.strip_stopword(token)
+            token = pre.strip_stopword(token, how=how)
         if strip_marks_bool:
             token = pre.strip_marks(token)
         if strip_space_bool:
@@ -198,13 +225,14 @@ class pre:
 
 class val:
     @staticmethod
-    def word(word: str, clean: bool = True, space_check: bool = True) -> bool:
+    def word(word: str, clean: bool = True, space_check: bool = True,
+             how: str = "light") -> bool:
         """Return True if the word appears in Olson’s validated word list."""
         global _valid_words
         if _valid_words is None:
             _valid_words = mod.load("olson-validated-words")
 
-        w = pre.clean_word(word) if clean else word
+        w = pre.clean_word(word, how=how) if clean else word
         if w is None:
             return False
         if space_check and not pre.space_check(w):
@@ -212,26 +240,26 @@ class val:
         return w in _valid_words
 
     @staticmethod
-    def noun(word: str) -> bool:
+    def noun(word: str, how: str = "light") -> bool:
         """Return True if the word has at least one noun synset in WordNet."""
         _ensure_nltk()
         from nltk.corpus import wordnet as wn
 
-        w = pre.clean_word(word)
+        w = pre.clean_word(word, how=how)
         if not w:
             return False
         return any(s.pos() == "n" for s in wn.synsets(w))
-    
+
     @staticmethod
-    def vocab(word: str, vocab: set) -> bool:
+    def vocab(word: str, vocab: set, how: str = "light") -> bool:
         """Return True if a compound word, e.g., ice-cream, is in the embedding vocab."""
-        w = pre.clean_word(word)
+        w = pre.clean_word(word, how=how)
         if not w:
             return False
         for cand in (w, w.replace(" ", "_"), w.replace(" ", "-"), w.replace("-", "_")):
             if cand in vocab:
                 return True
-        return False    
+        return False  
 
 
 # --- 3. cat: semantic / proper-noun category checks ------------------------
@@ -423,22 +451,23 @@ class cat:
 
     
     @staticmethod
-    def check_common(word: str, n_senses: int = 2) -> bool:
+    def check_common(word: str, n_senses: int = 2, how: str = "light") -> bool:
         """True if the word has ≥ n_senses ordinary (non-instance) noun senses."""
         _ensure_nltk()
         from nltk.corpus import wordnet as wn
-        word = pre.clean_word(word)
+        word = pre.clean_word(word, how=how)
         if not word:
             return False
         common = [s for s in wn.synsets(word, pos=wn.NOUN) if not s.instance_hypernyms()]
         return len(common) >= n_senses
 
     @staticmethod
-    def check_bucket(word: str, check_common: bool = False, n_senses: int = 2) -> set[str]:
+    def check_bucket(word: str, check_common: bool = False, n_senses: int = 2,
+                     how: str = "light") -> set[str]:
         """Return the set of curated bucket names a word belongs to."""
         _ensure_nltk()
         from nltk.corpus import wordnet as wn
-        word = pre.clean_word(word)
+        word = pre.clean_word(word, how=how)
         if not word:
             return set()
         out = set()
@@ -446,7 +475,7 @@ class cat:
             if name == "names":
                 seeds = _get_nltk_names()
             if seeds is not None and word in seeds:
-                if not (check_common and cat.check_common(word, n_senses)):
+                if not (check_common and cat.check_common(word, n_senses, how=how)):
                     out.add(name)
                     continue
             if syn is not None:
@@ -466,52 +495,31 @@ class cat:
         name: str | None = None,
         check_common: bool = False,
         n_senses: int = 2,
+        how: str = "light",
     ) -> bool:
-        """True if ≥ number_of_words of the words belong to the same bucket.
-        - name=None → any bucket
-        - name="environment" → environment objects
-        - name="places" / "names" / "brands" → SI place / name rules
-        """
+        """True if ≥ number_of_words of the words belong to the same bucket."""
         if name is not None and name not in cat.BUCKETS:
             raise ValueError(
                 f"Unknown bucket {name!r}. Valid names: {sorted(cat.BUCKETS)}")
         targets = [name] if name else list(cat.BUCKETS)
         counts = {c: 0 for c in targets}
         for w in words:
-            found = cat.check_bucket(w, check_common=check_common, n_senses=n_senses)
+            found = cat.check_bucket(
+                w, check_common=check_common, n_senses=n_senses, how=how)
             for key in targets:
                 if key in found:
                     counts[key] += 1
         return max(counts.values()) >= number_of_words
 
-    # ------------------------------------------------------------------
-    # Categories (WordNet hierarchy)
-    # ------------------------------------------------------------------
-
     @staticmethod
     @lru_cache(maxsize=100_000)
     def category_chain(
         word,
-        path: str = "long",                  # "long" | "short" | "full"
-        sense: str = "primary",              # "primary" | "union"
+        path: str = "long",
+        sense: str = "primary",
+        how: str = "light",
     ) -> list | None:
-        """WordNet category ladder, general → specific, excluding the word itself.
-
-        path
-            "short" – shortest hypernym path among the chosen sense(s)
-            "long"  – longest hypernym path among the chosen sense(s)
-            "full"  – every unique ancestor that appears on any path of the chosen sense(s)
-
-        sense
-            "primary" – use only the first (most frequent) noun synset
-            "union"   – combine all noun synsets of the word"""
-        
-        # Note: this order (general → specific) matches the list order of 
-        # NLTK’s hypernym_paths() (root first) but is the opposite of the 
-        # specific-to-general order commonly obtained by reversing paths, 
-        # by closure(hypernyms), or by many WordNet tutorial examples. 
-        # Users porting code that assumes the reverse should be aware.
-        
+        """WordNet category ladder, general → specific, excluding the word itself."""
         if path not in {"short", "long", "full"}:
             raise ValueError(f"path must be 'short', 'long' or 'full', got {path!r}")
         if sense not in {"primary", "union"}:
@@ -520,7 +528,7 @@ class cat:
         _ensure_nltk()
         from nltk.corpus import wordnet as wn
 
-        w = pre.clean_word(word) or ""
+        w = pre.clean_word(word, how=how) or ""
         if not w:
             return None
 
@@ -529,81 +537,66 @@ class cat:
         if not synsets:
             return None
 
-        # ---------- sense selection ----------
-        if sense == "primary":
-            target_synsets = synsets[:1]
-        else:  # "union"
-            target_synsets = synsets
-
-        # Collect every hypernym path from the chosen senses
+        target_synsets = synsets[:1] if sense == "primary" else synsets
         all_paths = []
         for syn in target_synsets:
             all_paths.extend(syn.hypernym_paths())
         if not all_paths:
             return None
 
-        # ---------- path selection ----------
         if path == "short":
             best = min(all_paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
-            ordered = best[:-1]                    # drop the leaf
-            return [n.name().split(".")[0] for n in ordered]
+            return [n.name().split(".")[0] for n in best[:-1]]
 
         if path == "long":
             best = max(all_paths, key=lambda p: (len(p), tuple(n.name() for n in p)))
-            ordered = best[:-1]
-            return [n.name().split(".")[0] for n in ordered]
+            return [n.name().split(".")[0] for n in best[:-1]]
 
-        # path == "full" → unique ancestors ordered by depth
         depth = {}
         for p in all_paths:
-            for i, node in enumerate(p[:-1]):      # already exclude every leaf
+            for i, node in enumerate(p[:-1]):
                 name = node.name().split(".")[0]
-                # keep the deepest occurrence so more specific placement is preferred
                 if name not in depth or i > depth[name]:
                     depth[name] = i
-
-        # general (low depth) → specific (high depth)
         return sorted(depth, key=lambda n: (depth[n], n))
 
     @staticmethod
-    def category_by_level(word, level: int = 4) -> str | None:
+    def category_by_level(word, level: int = 4, how: str = "light") -> str | None:
         """WordNet category name at one rung (0 = entity / most general)."""
-        chain = cat.category_chain(word)
+        chain = cat.category_chain(word, how=how)
         if not chain or level < 0 or level >= len(chain):
             return None
         return chain[level]
 
     @staticmethod
-    def check_same_category(word1, word2, level: int = 4) -> bool:
+    def check_same_category(word1, word2, level: int = 4,
+                            how: str = "light") -> bool:
         """True if both words share the same WordNet category at this level."""
-        c1 = cat.category_by_level(word1, level)
-        c2 = cat.category_by_level(word2, level)
+        c1 = cat.category_by_level(word1, level, how=how)
+        c2 = cat.category_by_level(word2, level, how=how)
         return c1 is not None and c1 == c2
 
     @staticmethod
-    def category_shared_name(word1, word2) -> str | None:
+    def category_shared_name(word1, word2, how: str = "light") -> str | None:
         """Most specific WordNet category name shared by both words."""
-        c1 = cat.category_chain(word1)
-        c2 = cat.category_chain(word2)
+        c1 = cat.category_chain(word1, how=how)
+        c2 = cat.category_chain(word2, how=how)
         if not c1 or not c2:
             return None
         set2 = set(c2)
-        
         for name in reversed(c1):
             if name in set2:
                 return name
         return None
 
     @staticmethod
-    def category_shared_level(word1, word2) -> int | None:
-        """Index on word1’s general→specific chain of the most specific shared category.
-        0 = most general / broadest; higher index = more specific.
-        (The word itself is never present in the chain.)"""
-        name = cat.category_shared_name(word1, word2)
+    def category_shared_level(word1, word2, how: str = "light") -> int | None:
+        """Index on word1’s chain of the most specific shared category."""
+        name = cat.category_shared_name(word1, word2, how=how)
         if name is None:
             return None
-        return cat.category_chain(word1).index(name)
-    
+        return cat.category_chain(word1, how=how).index(name)
+
     
 # --- 4. mod: word embeddings -----------------------------------------------
 
@@ -694,7 +687,7 @@ class mod:
         """Embed using exact match only."""
         return self.vectors.get(word)
 
-    def embed_phrase(self, phrase: str):
+    def embed_phrase(self, phrase: str, how: str = "light"):
         """Embed by trying space/_/- variants, otherwise
         average embeddings of non-stopword parts."""
         phrase = phrase.strip().lower()
@@ -709,7 +702,8 @@ class mod:
             if variant in self.vectors:
                 return self.vectors[variant]
 
-        parts = [self.vectors[p] for p in pre.remove_stopwords(phrase) if p in self.vectors]
+        parts = [self.vectors[p] for p in pre.remove_stopwords(phrase, how=how)
+                 if p in self.vectors]
         if parts and len({p.shape for p in parts}) == 1:
             return np.mean(np.stack(parts).astype(np.float32), axis=0)
         return None

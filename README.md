@@ -31,6 +31,7 @@ pre.strip_marks("  Cat! ")               # "  Cat  "
 pre.strip_stopword("The Cat")            # "Cat"
 pre.strip_space("jar of jam")            # "jarofjam"
 pre.remove_stopwords("jar of jam")       # ['jar', 'jam']
+pre.remove_stopwords("not just a box", how="heavy") # ['box']
 pre.space_check("cat")                   # True   (single token)
 pre.space_check("jar of jam")            # False
 
@@ -167,8 +168,9 @@ m.embed_exact("cat")                   # exact match only → np.ndarray or None
 m.vocab_set()                          # → set of all words in the model
 
 # Multi-word phrases
-m.embed_phrase("jar of jam")           # tries exact / underscore / hyphen variants,
-                                       # otherwise averages the non-stopword parts
+m.embed_phrase("jar of jam")               # tries exact / underscore / hyphen variants,
+                                           # otherwise averages the non-stopword parts
+m.embed_phrase("jar of jam", how="heavy")  # remove stopwords as in Beaty & Johnson (2021)
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings`.
