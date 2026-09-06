@@ -131,7 +131,7 @@ cat.category_chain("badger", path="full", sense="union")
 
 Load a vector model and embed single words or short phrases. Embedding models available:
 
-| Key | Dimensions | What it is |
+| Key | Dims | Descriptions |
 | --- | --- | --- |
 | `glove-6b-300d` | 300 | Stanford GloVe trained on Wikipedia + Gigaword (6B tokens). |
 | `glove-840b-300d` | 300 | Stanford GloVe trained on Common Crawl (840B tokens). |
