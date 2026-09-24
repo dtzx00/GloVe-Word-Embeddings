@@ -13,6 +13,7 @@ CACHE_DIR = os.environ.get(
     "GLOVE_WORD_EMBEDDINGS_CACHE") or os.path.expanduser(
     "~/.cache/glove-word-embeddings")
 
+# Files are hosted on AWS S3 Bucket:
 FILES = {
     "glove-840b-300d": "glove.840B.300d.pickle",
     "glove-6b-300d": "glove.6B.300d.pickle",
