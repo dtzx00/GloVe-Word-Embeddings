@@ -1,6 +1,6 @@
 # GloVe-Word-Embeddings
 
-Library to quickly clean, validate, categorise and embed words for academic research.  
+This is a library to quickly clean, validate, categorise and embed words for academic research.  
 Design is based on Wang et al., 2026 (*Nature Human Behaviour*) and Olson et al., 2021 (*PNAS*).
 
 This package has four parts:
