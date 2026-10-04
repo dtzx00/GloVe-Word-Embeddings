@@ -199,12 +199,12 @@ Johnson et al., (2023)
 Johnson, D. R., Kaufman, J. C., Baker, B. S., Patterson, J. D., Barbot, B., Green, A. E., van Hell, J., Kennedy, E., Sullivan, G. F., Taylor, C. L., Ward, T., & Beaty, R. E. (2023). Divergent semantic integration (DSI): Extracting creativity from narratives with distributional semantic modeling. Behavior Research Methods, 55(7), 3726–3759. https://doi.org/10.3758/s13428-022-01986-2
 ```
 
-Brysbaert et al., (2014) -- Concreteness ratings
+Brysbaert et al., (2014) - *Concreteness ratings*
 ```markdown
 Brysbaert, M., Warriner, A. B., & Kuperman, V. (2014). Concreteness ratings for 40 thousand generally known English word lemmas. Behavior Research Methods, 46(3), 904–911. https://doi.org/10.3758/s13428-013-0403-5
 ```
 
-Kuperman et al., (2012) -- Age of acquisition ratings
+Kuperman et al., (2012) - *Age of acquisition ratings*
 ```markdown
 Kuperman, V., Stadthagen-Gonzalez, H., & Brysbaert, M. (2012). Age-of-acquisition ratings for 30,000 English words. Behavior Research Methods, 44(4), 978–990. https://doi.org/10.3758/s13428-012-0210-4
 ```
