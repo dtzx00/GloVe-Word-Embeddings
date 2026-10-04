@@ -179,19 +179,32 @@ Files are cached in `~/.cache/glove-word-embeddings`.
 
 If you like this package, please cite the relevant works.
 
-Wang et al., (2026) -- Package owner
+Wang et al., (2026) -- Package owner [CITE THIS!]
 ```markdown
 Wang, D., Huang, D., Shen, H., & Uzzi, B. (2026). A large-scale comparison of divergent creativity in humans and large language models. Nature Human Behaviour, 10(3), 531–540. https://doi.org/10.1038/s41562-025-02331-1
 ```
-Olson et al., (2021) -- Other labs
+
+Olson et al., (2021)
 ```markdown
 Olson, J. A., Nahas, J., Chmoulevitch, D., Cropper, S. J., & Webb, M. E. (2021). Naming unrelated words predicts creativity. Proceedings of the National Academy of Sciences, 118(25), e2022340118. https://doi.org/10.1073/pnas.2022340118
 ```
-Beaty & Johnson, (2021) -- Other labs
+
+Beaty & Johnson, (2021)
 ```markdown
 Beaty, R. E., & Johnson, D. R. (2021). Automating creativity assessment with SemDis: An open platform for computing semantic distance. Behavior Research Methods, 53(2), 757–780. https://doi.org/10.3758/s13428-020-01453-w
 ```
-Johnson et al., (2023) -- Other labs
+
+Johnson et al., (2023)
 ```markdown
 Johnson, D. R., Kaufman, J. C., Baker, B. S., Patterson, J. D., Barbot, B., Green, A. E., van Hell, J., Kennedy, E., Sullivan, G. F., Taylor, C. L., Ward, T., & Beaty, R. E. (2023). Divergent semantic integration (DSI): Extracting creativity from narratives with distributional semantic modeling. Behavior Research Methods, 55(7), 3726–3759. https://doi.org/10.3758/s13428-022-01986-2
+```
+
+Brysbaert et al., (2014) -- Concreteness ratings
+```markdown
+Brysbaert, M., Warriner, A. B., & Kuperman, V. (2014). Concreteness ratings for 40 thousand generally known English word lemmas. Behavior Research Methods, 46(3), 904–911. https://doi.org/10.3758/s13428-013-0403-5
+```
+
+Kuperman et al., (2012) -- Age of acquisition ratings
+```markdown
+Kuperman, V., Stadthagen-Gonzalez, H., & Brysbaert, M. (2012). Age-of-acquisition ratings for 30,000 English words. Behavior Research Methods, 44(4), 978–990. https://doi.org/10.3758/s13428-012-0210-4
 ```
