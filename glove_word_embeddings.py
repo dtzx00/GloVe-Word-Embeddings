@@ -727,9 +727,9 @@ class rat:
 
     @staticmethod
     def load(key, force_download=False):
-        if key not in RATINGS:
-            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(RATINGS)}")
-        filename = RATINGS[key]
+        if key not in FILES:
+            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(FILES)}")
+        filename = FILES[key]
         os.makedirs(CACHE_DIR, exist_ok=True)
         path = os.path.join(CACHE_DIR, filename)
         if force_download or not os.path.exists(path):
