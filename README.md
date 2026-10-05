@@ -7,9 +7,9 @@ This package has five parts:
 
 1. **pre** — clean, normalise or lemmatize words  
 2. **val** — validate against Olson’s list or WordNet nouns  
-3. **cat** — classify to proper-noun buckets or WordNet categories
+3. **cat** — classify to proper-noun buckets or WordNet categories 🐈
 4. **mod** — load embeddings and turn words or phrases into vectors  
-5. **rat** — look up concreteness, complexity, and age-of-acquisition ratings
+5. **rat** — look up concreteness, complexity, and age-of-acquisition ratings 🐁
 
 Embedding models and rating norms are hosted on an AWS S3 bucket and downloaded automatically on first use.  
 NLTK WordNet and names data are also downloaded automatically on first use of any category helper.
