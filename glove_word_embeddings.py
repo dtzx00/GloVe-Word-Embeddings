@@ -746,28 +746,35 @@ class rat:
         }
         return rat(scores)
 
-    def score(self, word):
-        """Exact, then lowercase, then space/_/- . None if missing."""
+    def score(self, word, clean=True):
+        """Exact, then lowercase, then space/_/- . clean strips punctuation."""
         if not word:
             return None
-        w = str(word).strip()
-        for cand in (w, w.lower(), w.replace(" ", "_"), w.replace(" ", "-"),
-                     w.lower().replace(" ", "_"), w.lower().replace(" ", "-")):
-            if cand in self.scores:
-                return self.scores[cand]
-            if cand.lower() in self._lower:
-                return self._lower[cand.lower()]
+        forms = [str(word).strip()]
+        if clean:
+            c = pre.clean_word(
+                word, strip_stopword_bool=False, strip_space_bool=False)
+            if c:
+                forms.append(" ".join(c.split()))
+        for w in forms:
+            for cand in (w, w.lower(), w.replace(" ", "_"), w.replace(" ", "-"),
+                         w.lower().replace(" ", "_"), w.lower().replace(" ", "-")):
+                if cand in self.scores:
+                    return self.scores[cand]
+                if cand.lower() in self._lower:
+                    return self._lower[cand.lower()]
         return None
 
-    def score_phrase(self, phrase, how="light"):
+    def score_phrase(self, phrase, how="light", clean=True):
         """Whole phrase first, else mean of known non-stopword tokens."""
         phrase = (phrase or "").strip()
         if not phrase:
             return None
-        hit = self.score(phrase)
+        hit = self.score(phrase, clean=clean)
         if hit is not None:
             return hit
-        parts = [self.score(p) for p in pre.remove_stopwords(phrase, how=how)]
+        parts = [self.score(p, clean=clean)
+                 for p in pre.remove_stopwords(phrase, how=how)]
         parts = [p for p in parts if p is not None]
         return float(np.mean(parts)) if parts else None
 

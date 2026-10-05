@@ -180,6 +180,8 @@ Files are cached in `~/.cache/glove-word-embeddings`.
 
 Scalar norms, not embeddings. Load with `rat.load`, not `mod.load`. Missing words return `None`. Stored scales: concreteness is Brysbaert’s 1–5 mean rescaled as `(Conc.M − 1) / 4 × 100`, complexity is 0–100, age of acquisition is years.
 
+`score` and `score_phrase` clean by default (`clean=True`): lowercase and strip punctuation, using `pre.clean_word` without dropping stopwords or spaces. `Arsenal.` hits. `ice cream` stays a bigram. `clean=False` is the exact key.
+
 | Key | What |
 | --- | --- |
 | `brysbaert-concreteness` | Brysbaert, Warriner & Kuperman (2014). Includes multiword items such as `ice cream`. |
@@ -192,7 +194,8 @@ from glove_word_embeddings import rat
 r = rat.load("brysbaert-concreteness")   # downloads on first use, caches locally
 r.score("dog")                           # 96.25
 r.score("ice cream")                     # bigram hit, not an average
-r.score("arsenal")                       # case-folded
+r.score("Arsenal.")                      # punctuation stripped, then case-folded
+r.score("Arsenal.", clean=False)         # None
 r.score_phrase("jar of jam")             # whole phrase, else mean of known tokens
 r.score_phrase("jar of jam", how="heavy")
 r.vocab_set()
