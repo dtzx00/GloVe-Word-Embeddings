@@ -208,3 +208,8 @@ Kuperman et al., (2012) - *Age of acquisition ratings*
 ```markdown
 Kuperman, V., Stadthagen-Gonzalez, H., & Brysbaert, M. (2012). Age-of-acquisition ratings for 30,000 English words. Behavior Research Methods, 44(4), 978–990. https://doi.org/10.3758/s13428-012-0210-4
 ```
+
+Maddela et al., (2018) - *Word complexity*
+```markdown
+Maddela, M., & Xu, W. (2018). A word-complexity lexicon and a neural readability ranking model for lexical simplification. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing (pp. 3749–3760). Association for Computational Linguistics. https://doi.org/10.18653/v1/D18-1410
+```
