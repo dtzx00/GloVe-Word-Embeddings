@@ -715,3 +715,61 @@ class mod:
     def vocab_set(self):
         """Full set of vocabulary in the embedding."""
         return set(self.vectors)
+
+# --- 5. rat: concreteness, complexity, age of acquisition -----------------
+
+class rat:
+    def __init__(self, scores):
+        self.scores = scores
+        self._lower = {}
+        for k, v in scores.items():
+            self._lower.setdefault(k.lower(), v)
+
+    @staticmethod
+    def load(key, force_download=False):
+        if key not in RATINGS:
+            raise KeyError(f"Unknown key {key!r}. Valid keys: {sorted(RATINGS)}")
+        filename = RATINGS[key]
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        path = os.path.join(CACHE_DIR, filename)
+        if force_download or not os.path.exists(path):
+            resp = requests.get(f"{BASE_URL}/{filename}", stream=True)
+            resp.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+        with open(path, "rb") as f:
+            raw = pickle.load(f)
+        scores = {
+            k: float(v) for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, (int, float)) and v == v
+        }
+        return rat(scores)
+
+    def score(self, word):
+        """Exact, then lowercase, then space/_/- . None if missing."""
+        if not word:
+            return None
+        w = str(word).strip()
+        for cand in (w, w.lower(), w.replace(" ", "_"), w.replace(" ", "-"),
+                     w.lower().replace(" ", "_"), w.lower().replace(" ", "-")):
+            if cand in self.scores:
+                return self.scores[cand]
+            if cand.lower() in self._lower:
+                return self._lower[cand.lower()]
+        return None
+
+    def score_phrase(self, phrase, how="light"):
+        """Whole phrase first, else mean of known non-stopword tokens."""
+        phrase = (phrase or "").strip()
+        if not phrase:
+            return None
+        hit = self.score(phrase)
+        if hit is not None:
+            return hit
+        parts = [self.score(p) for p in pre.remove_stopwords(phrase, how=how)]
+        parts = [p for p in parts if p is not None]
+        return float(np.mean(parts)) if parts else None
+
+    def vocab_set(self):
+        return set(self.scores)
