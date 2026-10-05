@@ -31,7 +31,10 @@ FILES = {
     "flair-olson-twitter": "flair_olson_common_words_twitter.pickle",
     "flair-olson-turian": "flair_olson_common_words_turian.pickle",
     "flair-olson-random": "flair_olson_common_words_random.pickle",
-    "olson-validated-words": "olson_validated_100k_words.txt",}
+    "olson-validated-words": "olson_validated_100k_words.txt",
+    "brysbaert-concreteness": "Brysbaert_concreteness.pickle",
+    "maddela-complexity": "Maddela_complexity.pickle",
+    "kuperman-aoa": "Kuperman_aoa.pickle"}
 
 _valid_words = None
 _nltk_names = None
