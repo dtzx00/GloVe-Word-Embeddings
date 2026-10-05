@@ -3,14 +3,15 @@
 This is a library to quickly clean, validate, categorise and embed words for academic research.  
 Design is based on Wang et al., 2026 (*Nature Human Behaviour*) and Olson et al., 2021 (*PNAS*).
 
-This package has four parts:
+This package has five parts:
 
 1. **pre** — clean, normalise or lemmatize words  
 2. **val** — validate against Olson’s list or WordNet nouns  
 3. **cat** — classify to proper-noun buckets or WordNet categories
 4. **mod** — load embeddings and turn words or phrases into vectors  
+5. **rat** — look up concreteness, complexity, and age-of-acquisition ratings
 
-Embedding models are hosted on an AWS S3 bucket and downloaded automatically on first use.  
+Embedding models and rating norms are hosted on an AWS S3 bucket and downloaded automatically on first use.  
 NLTK WordNet and names data are also downloaded automatically on first use of any category helper.
 
 #### Installation
@@ -174,6 +175,28 @@ m.embed_phrase("jar of jam", how="heavy")  # remove stopwords as in Beaty & John
 ```
 
 Files are cached in `~/.cache/glove-word-embeddings`.
+
+### Ratings (`rat`)
+
+Scalar norms, not embeddings. Load with `rat.load`, not `mod.load`. Missing words return `None`. Stored scales: concreteness is Brysbaert’s 1–5 mean rescaled as `(Conc.M − 1) / 4 × 100`, complexity is 0–100, age of acquisition is years.
+
+| Key | What |
+| --- | --- |
+| `brysbaert-concreteness` | Brysbaert, Warriner & Kuperman (2014). Includes multiword items such as `ice cream`. |
+| `maddela-complexity` | Maddela & Xu (2018) word-complexity lexicon. |
+| `kuperman-aoa` | Kuperman, Stadthagen-Gonzalez & Brysbaert (2012). |
+
+```python
+from glove_word_embeddings import rat
+
+r = rat.load("brysbaert-concreteness")   # downloads on first use, caches locally
+r.score("dog")                           # 96.25
+r.score("ice cream")                     # bigram hit, not an average
+r.score("arsenal")                       # case-folded
+r.score_phrase("jar of jam")             # whole phrase, else mean of known tokens
+r.score_phrase("jar of jam", how="heavy")
+r.vocab_set()
+```
 
 ### Citations
 
